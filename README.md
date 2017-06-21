@@ -22,58 +22,58 @@ import (
 
 func main() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-    if err != nil {
-        panic(err)
-    }
-    defer conn.Close()
-    
-    ch, err := conn.Channel()
-    if err != nil {
-        panic(err)
-    }
-    defer ch.Close()
-    
-    q, err := ch.QueueDeclare(
-        "hello_q", // name
-        true,    // durable
-        false,   // delete when unused
-        false,   // exclusive
-        false,   // no-wait
-        nil,     // arguments
-    )
-    if err != nil {
-        panic(err)
-    }
-    
-    err = ch.ExchangeDeclare(
-      "demo",   // name
-      "direct", // type
-      true,     // durable
-      false,    // auto-deleted
-      false,    // internal
-      false,    // no-wait
-      nil,      // arguments
-    )
-    
-    err = ch.QueueBind(q.Name, "route", "demo", false, nil)
-    if err != nil {
-        panic(err)
-    }
-    
-    body := "hello world!"
-    err = ch.Publish(
-        "demo", // exchange
-        "route", // routing key
-        false,  // mandatory
-        false,  // immediate
-        amqp.Publishing {
-          ContentType: "text/plain",
-          Body:        []byte(body),
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+	
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+	defer ch.Close()
+	
+	q, err := ch.QueueDeclare(
+		"hello_q", // name
+		true,    // durable
+		false,   // delete when unused
+		false,   // exclusive
+		false,   // no-wait
+		nil,     // arguments
+	)
+	if err != nil {
+		panic(err)
+	}
+	
+	err = ch.ExchangeDeclare(
+	  "demo",   // name
+	  "direct", // type
+	  true,     // durable
+	  false,    // auto-deleted
+	  false,    // internal
+	  false,    // no-wait
+	  nil,      // arguments
+	)
+	
+	err = ch.QueueBind(q.Name, "route", "demo", false, nil)
+	if err != nil {
+		panic(err)
+	}
+	
+	body := "hello world!"
+	err = ch.Publish(
+		"demo", // exchange
+		"route", // routing key
+		false,  // mandatory
+		false,  // immediate
+		amqp.Publishing {
+		  ContentType: "text/plain",
+		  Body:        []byte(body),
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
 }
 ```
 
@@ -90,7 +90,7 @@ mq:
     demo:                   # Exchange name.
       type: "direct"
       options:
-      	durable: true
+        durable: true
   queues:                   # Queue list.
     hello_q:                # Queue name.
       exchange: "demo"      # Link to exchange "demo".
@@ -114,13 +114,13 @@ package main
 import (
 	"log"
 
-    "github.com/cheshir/go-mq"
-    "github.com/spf13/viper"
+	"github.com/cheshir/go-mq"
+	"github.com/spf13/viper"
 )
 
 func main() {
-    // Reads config.
-    // TODO in task #2.
+	// Reads config.
+	// TODO in task #2.
 
 	queue, err := mq.New(viper.Sub("mq"))
 	if err != nil {
@@ -196,8 +196,8 @@ package main
 import (
 	"log"
 
-    "github.com/cheshir/go-mq"
-    "github.com/spf13/viper"
+	"github.com/cheshir/go-mq"
+	"github.com/spf13/viper"
 )
 
 func main() {
