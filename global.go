@@ -1,11 +1,9 @@
-// Just for that guys who love to keep all in the global scope.
+// Just for that guys who love to keep everything in the global scope.
 package mq
-
-import "github.com/spf13/viper"
 
 var mq MQer
 
-func NewGlobal(config *viper.Viper) (err error) {
+func NewGlobal(config Config) (err error) {
 	mq, err = New(config)
 
 	return

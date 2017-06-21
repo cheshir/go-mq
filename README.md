@@ -86,43 +86,46 @@ Config file:
 ```yaml
 mq:
   dsn: "amqp://guest:guest@localhost:5672/"
-  exchanges:                # Exchange list.
-    demo:                   # Exchange name.
+  exchanges:
+    - name: "demo"
       type: "direct"
       options:
         durable: true
-  queues:                   # Queue list.
-    hello_q:                # Queue name.
+  queues:
+    - name: "hello_q"
       exchange: "demo"      # Link to exchange "demo".
       routing_key: "route"
       options:
         durable: true
-  producers:                # Producer list.
-    hello_p:                # Producer name.
+  producers:
+    - name: "hello_p"
       exchange: "demo"      # Link to exchange "demo".
       routing_key: "route"
       options:
         content_type: "text/plain"
-
 ```
 
-And then:
+And then we're going to read config with [Viper](https://github.com/spf13/viper) and produce message to the queue:
 
 ```go
 package main
 
 import (
-	"log"
-
 	"github.com/cheshir/go-mq"
 	"github.com/spf13/viper"
 )
 
-func main() {
-	// Reads config.
-	// TODO in task #2.
+func init() {
+    // Configure viper.
+}
 
-	queue, err := mq.New(viper.Sub("mq"))
+func main() {
+	var config mq.Config
+	if err := viper.Sub("mq").Unmarshal(&config); err != nil {
+		panic(err)
+	}
+
+	queue, err := mq.New(config)
 	if err != nil {
 		panic("Error during initializing RabbitMQ: " + err.Error())
 	}
@@ -139,6 +142,12 @@ func main() {
 }
 ```
 
+Of course, you can fill `mq.Config` without `Viper`. Supported tags:
+
+* json
+* yaml
+* mapstructure
+
 Exchanges, queues and producers are going to be initialized in the background.
 
 You can get concrete producer with `queue.GetProducer()`.
@@ -148,18 +157,16 @@ You can get concrete producer with `queue.GetProducer()`.
 ```yaml
 dsn: "amqp://login:password@host:port/virtual_host"
 reconnect_timeout: 5                     # Interval between connection tries in seconds.
-exchanges:                               # Exchange list.
-  exchange_name:
+exchanges:
+  - name: "exchange_name"
     type: "direct"
     options:
       # Available options with default values:
-      durable: false
       auto_delete: false
-      autoDelete: false
+      durable: false
       internal: false
       no_wait: false
-      noWait: false
-queues:                                  # Queue list.
+queues:
   queue_name:
     exchange: "exchange_name"
     routing_key: "route"
@@ -167,23 +174,21 @@ queues:                                  # Queue list.
     # The syntax and semantics of these arguments depend on the exchange class.
     binding_options:
       no_wait: false
-      noWait: false
-    options:
-      durable: false
-      auto_delete: false
-      autoDelete: false
-      exclusive: false
-      no_wait: false
-      noWait: false
-producers:                               # Producer list.
-  producer_name:
-    exchange: "exchange_name"
-    routing_key: "route"
-    buffer_size: 100                     # Declare how many messages we can buffer during fat messages publishing.
     # Available options:
     options:
-      deliveryMode: 2                    # 1 - non persistent, 2 - persistent.
-      contentType:  "application/json"
+      auto_delete: false
+      durable: false
+      exclusive: false
+      no_wait: false
+producers:
+  producer_name:
+    buffer_size: 100                     # Declare how many messages we can buffer during fat messages publishing.
+    exchange: "exchange_name"
+    routing_key: "route"
+    # Available options:
+    options:
+      content_type:  "application/json"
+      delivery_mode: 2                    # 1 - non persistent, 2 - persistent.
 ```
 
 ## Error handling
@@ -201,15 +206,16 @@ import (
 )
 
 func main() {
-	queue, _ := mq.New(viper.Sub("config_key"))
+	config := mq.Config{} // Set your configuration.
+	queue, _ := mq.New(config)
 	// ...
 
-	go handleErrors(queue.Error())
+	go handleMQErrors(queue.Error())
 	
 	// Other logic.
 }
 
-func handleErrors(errors <-chan error) {
+func handleMQErrors(errors <-chan error) {
 	for err := range errors {
 		log.Println(err)
 	}
