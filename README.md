@@ -1,12 +1,3 @@
-- [About](#about)
-  * [Install](#install)
-  * [Example](#example)
-    + [Hello world with default AMQP library](#hello-world-with-default-amqp-library)
-    + [Same hello world with go-mq](#same-hello-world-with-go-mq)
-  * [Config in depth](#config-in-depth)
-  * [Error handling](#error-handling)
-  * [Epilogue](#epilogue)
-
 # About
 
 This package provides an ability to encapsulate creation and configuration of [AMQP](https://www.amqp.org) entities 
@@ -228,3 +219,7 @@ func handleErrors(errors <-chan error) {
 ## Epilogue
 
 Feel free to create issues with bug reports or your wishes.
+
+## License
+
+go-mq is released under the Apache 2.0 license.
