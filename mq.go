@@ -6,9 +6,28 @@ import (
 
 	"github.com/NeowayLabs/wabbit"
 	"github.com/NeowayLabs/wabbit/amqp"
-	"github.com/spf13/viper"
 	amqpDriver "github.com/streadway/amqp"
 )
+
+func New(config Config) (MQer, error) {
+	config.normalize()
+
+	mq := &MQ{
+		errorChannel:         make(chan error, 1),
+		dsn:                  config.DSN,
+		internalErrorChannel: make(chan error, 1),
+		producers:            newProducersRegistry(len(config.Producers)),
+		reconnectTimeout:     config.ReconnectTimeout,
+	}
+
+	if err := mq.connect(); err != nil {
+		return nil, err
+	}
+
+	go mq.errorHandler()
+
+	return mq, mq.setup(config)
+}
 
 type MQer interface {
 	GetProducer(name string) (Producer, bool)
@@ -22,98 +41,85 @@ type MQ struct {
 	errorChannel         chan error
 	dsn                  string // We need to store it for reconnect.
 	internalErrorChannel chan error
-	producers            map[string]*producer
+	producers            producersRegistry
 	reconnectTimeout     time.Duration // Delay before reconnect in seconds.
 }
 
-func New(config *viper.Viper) (MQer, error) {
-	mq := &MQ{
-		errorChannel:         make(chan error, 1),
-		dsn:                  config.GetString("dsn"),
-		internalErrorChannel: make(chan error, 1),
-		producers:            make(map[string]*producer),
-		reconnectTimeout:     time.Duration(config.GetInt("reconnect_timeout")) * time.Second,
+func (mq *MQ) setup(config Config) error {
+	if err := mq.setupExchanges(config.Exchanges); err != nil {
+		return err
 	}
 
-	if err := mq.connect(); err != nil {
-		return nil, err
+	if err := mq.setupQueues(config.Queues); err != nil {
+		return err
 	}
 
-	go mq.errorHandler()
+	if err := mq.setupProducers(config.Producers); err != nil {
+		return err
+	}
 
-	return mq, mq.readConfig(config)
+	return nil
 }
 
-type configReaders struct {
-	ConfigKey string                                       // Root key for a block of MQ configuration.
-	Read      func(name string, config *viper.Viper) error // Function that process block of configuration.
-}
-
-func (mq *MQ) readConfig(config *viper.Viper) error {
-	// We declare this list inside the function because we need access to private methods.
-	readers := [3]configReaders{
-		{ConfigKey: "exchanges", Read: mq.declareExchange},
-		{ConfigKey: "queues", Read: mq.declareQueue},
-		{ConfigKey: "producers", Read: mq.registerProducer},
-	}
-
-	for _, reader := range readers {
-		readerConfig := config.Sub(reader.ConfigKey)
-
-		// Ignore nonexistent blocks of configuration.
-		if readerConfig == nil {
-			continue
-		}
-
-		// Each configuration block represents collection of configurations
-		// for single type components like queues or consumers
-		// where key is a name of component and value is its configuration.
-		for name := range readerConfig.AllSettings() {
-			if err := reader.Read(name, readerConfig.Sub(name)); err != nil {
-				return err
-			}
+func (mq *MQ) setupExchanges(exchanges Exchanges) error {
+	for _, config := range exchanges {
+		if err := mq.declareExchange(config); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (mq *MQ) declareExchange(name string, config *viper.Viper) error {
-	exchangeType := config.GetString("type")
-	exchangeOptions := fixCapitalization(config.GetStringMap("options"))
-
-	return mq.channel.ExchangeDeclare(name, exchangeType, exchangeOptions)
+func (mq *MQ) declareExchange(config ExchangeConfig) error {
+	return mq.channel.ExchangeDeclare(config.Name, config.Type, wabbit.Option(config.Options))
 }
 
-func (mq *MQ) declareQueue(name string, config *viper.Viper) error {
-	exchange := config.GetString("exchange")
-	routingKey := config.GetString("routing_key")
-	options := fixCapitalization(config.GetStringMap("options"))
-	bindingOptions := fixCapitalization(config.GetStringMap("binding_options"))
+func (mq *MQ) setupQueues(queues Queues) error {
+	for _, config := range queues {
+		if err := mq.declareQueue(config); err != nil {
+			return err
+		}
+	}
 
-	if _, err := mq.channel.QueueDeclare(name, options); err != nil {
+	return nil
+}
+
+func (mq *MQ) declareQueue(config QueueConfig) error {
+	if _, err := mq.channel.QueueDeclare(config.Name, wabbit.Option(config.Options)); err != nil {
 		return err
 	}
 
-	return mq.channel.QueueBind(name, routingKey, exchange, bindingOptions)
+	return mq.channel.QueueBind(config.Name, config.RoutingKey, config.Exchange, wabbit.Option(config.BindingOptions))
 }
 
-func (mq *MQ) registerProducer(name string, config *viper.Viper) error {
-	if _, ok := mq.producers[name]; ok {
-		return fmt.Errorf(`Producer with name "%s" already exists`, name)
+func (mq *MQ) setupProducers(producers Producers) error {
+	for _, config := range producers {
+		if err := mq.registerProducer(config); err != nil {
+			return err
+		}
 	}
 
-	producer := &producer{
+	return nil
+}
+
+func (mq *MQ) registerProducer(config ProducerConfig) error {
+
+	if _, ok := mq.producers.Get(config.Name); ok {
+		return fmt.Errorf(`Producer with name "%s" is already registered`, config.Name)
+	}
+
+	producer := producer{
 		channel:        mq.channel,
 		errorChannel:   mq.internalErrorChannel,
-		exchange:       config.GetString("exchange"),
-		options:        fixCapitalization(config.GetStringMap("publish_options")),
-		publishChannel: make(chan []byte, config.GetInt("buffer_size")),
-		routingKey:     config.GetString("routing_key"),
+		exchange:       config.Exchange,
+		options:        wabbit.Option(config.Options),
+		publishChannel: make(chan []byte, config.BufferSize),
+		routingKey:     config.RoutingKey,
 	}
 
 	go producer.worker()
-	mq.producers[name] = producer
+	mq.producers.Set(config.Name, &producer)
 
 	return nil
 }
@@ -158,21 +164,17 @@ func (mq *MQ) processError(err interface{}) {
 
 func (mq *MQ) reconnect() {
 	mq.connect()
-
-	for _, producer := range mq.producers {
-		producer.setChannel(mq.channel)
-	}
+	mq.producers.SetNewChannel(mq.channel)
 }
 
-// You can check for errors by reading errors from this channel.
+// Error provides an ability to access occurring errors.
 func (mq *MQ) Error() <-chan error {
 	return mq.errorChannel
 }
 
+// GetProducer returns a producer by its name.
 func (mq *MQ) GetProducer(name string) (publisher Producer, ok bool) {
-	publisher, ok = mq.producers[name]
-
-	return
+	return mq.producers.Get(name)
 }
 
 // TODO stop producers and consumers.
