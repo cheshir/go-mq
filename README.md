@@ -167,7 +167,7 @@ exchanges:
       internal: false
       no_wait: false
 queues:
-  queue_name:
+  - name: "queue_name"
     exchange: "exchange_name"
     routing_key: "route"
     # A set of arguments for the binding.
@@ -181,14 +181,14 @@ queues:
       exclusive: false
       no_wait: false
 producers:
-  producer_name:
+  - name: "producer_name"
     buffer_size: 100                     # Declare how many messages we can buffer during fat messages publishing.
     exchange: "exchange_name"
     routing_key: "route"
     # Available options:
     options:
       content_type:  "application/json"
-      delivery_mode: 2                    # 1 - non persistent, 2 - persistent.
+      delivery_mode: 2                   # 1 - non persistent, 2 - persistent.
 ```
 
 ## Error handling
