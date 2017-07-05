@@ -1,9 +1,12 @@
+[![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
+[![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
+
+
 # About
 
 This package provides an ability to encapsulate creation and configuration of [AMQP](https://www.amqp.org) entities 
 like queues, exchanges, producers and consumers in a declarative way with a single config.
-
-Status: **WIP**.
 
 ## Install
 
@@ -35,11 +38,11 @@ func main() {
 	
 	q, err := ch.QueueDeclare(
 		"hello_q", // name
-		true,    // durable
-		false,   // delete when unused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
 	)
 	if err != nil {
 		panic(err)
@@ -62,10 +65,10 @@ func main() {
 	
 	body := "hello world!"
 	err = ch.Publish(
-		"demo", // exchange
+		"demo",  // exchange
 		"route", // routing key
-		false,  // mandatory
-		false,  // immediate
+		false,   // mandatory
+		false,   // immediate
 		amqp.Publishing {
 		  ContentType: "text/plain",
 		  Body:        []byte(body),
@@ -73,6 +76,28 @@ func main() {
 	)
 	if err != nil {
 		panic(err)
+	}
+	
+	deliveries, err := ch.Consume(
+		q.Name, // name
+		"",       // consumer tag
+		false,    // auto ack
+		false,    // exclusive
+		false,    // no-local
+		false,    // no-wait,
+		nil,
+	)
+	if err != nil {
+		panic(err)
+	}
+	
+	handleMessages(deliveries)
+}
+
+func handleMessages(deliveries <-chan amqp.Delivery) {
+	for message := range deliveries {
+		// Process message here.
+		message.Ack(false)
 	}
 }
 ```
@@ -103,6 +128,10 @@ mq:
       routing_key: "route"
       options:
         content_type: "text/plain"
+  consumers:
+    - name: "hello_c"
+      queue: "hello_q"      # Link to queue
+      workers: 1
 ```
 
 And then we're going to read config with [Viper](https://github.com/spf13/viper) and produce message to the queue:
@@ -139,6 +168,25 @@ func main() {
 	
 	body := "hello world!"
 	producer.Produce([]byte(body))
+	
+	consumer, ok := queue.GetConsumer("hello_c")
+	if !ok {
+		panic("Trying to get unknown consumer")
+	}
+	consumer.Consume(handleMessages)
+	
+	// Or you can use a little bit shorter approach:
+	// ok = queue.SetConsumerHandler("hello_c", handleMessages)
+	// if !ok {
+	//	  panic("Can't set handler for consumer hello_c")
+	// }
+	
+	select {}
+}
+
+func handleMessages(message mq.Message) {
+	// Process message here.
+	message.Ack(false)
 }
 ```
 
@@ -156,7 +204,7 @@ You can get concrete producer with `queue.GetProducer()`.
 
 ```yaml
 dsn: "amqp://login:password@host:port/virtual_host"
-reconnect_timeout: 5                     # Interval between connection tries in seconds.
+reconnect_delay: 5s                     # Interval between connection tries. Check https://golang.org/pkg/time/#ParseDuration for details.
 exchanges:
   - name: "exchange_name"
     type: "direct"
@@ -174,7 +222,7 @@ queues:
     # The syntax and semantics of these arguments depend on the exchange class.
     binding_options:
       no_wait: false
-    # Available options:
+    # Available options with default values:
     options:
       auto_delete: false
       durable: false
@@ -182,13 +230,23 @@ queues:
       no_wait: false
 producers:
   - name: "producer_name"
-    buffer_size: 100                     # Declare how many messages we can buffer during fat messages publishing.
+    buffer_size: 10                      # Declare how many messages we can buffer during fat messages publishing.
     exchange: "exchange_name"
     routing_key: "route"
-    # Available options:
+    # Available options with default values:
     options:
       content_type:  "application/json"
       delivery_mode: 2                   # 1 - non persistent, 2 - persistent.
+consumers:
+  - name: "consumer_name"
+    queue: "queue_name"
+    workers: 1                           # Workers count. Defaults to 1.
+    # Available options with default values:
+    options:
+      no_ack: false
+      no_local: false
+      no_wait: false
+      exclusive: false
 ```
 
 ## Error handling
@@ -222,10 +280,14 @@ func handleMQErrors(errors <-chan error) {
 }
 ```
 
+If channel is full – new errors will be dropped.
+
+# Reconnect
+
+go-mq will try to reconnect on closed connection or network error. 
+
+You can set delay between each try with `reconnect_delay` option.
+
 ## Epilogue
 
 Feel free to create issues with bug reports or your wishes.
-
-## License
-
-go-mq is released under the Apache 2.0 license.

@@ -11,11 +11,12 @@ const (
 )
 
 type Config struct {
-	DSN              string        `mapstructure:"dsn" json:"dsn" yaml:"dsn"`
-	ReconnectTimeout time.Duration `mapstructure:"reconnect_timeout" json:"reconnect_timeout" yaml:"reconnect_timeout"`
-	Exchanges        Exchanges     `mapstructure:"exchanges" json:"exchanges" yaml:"exchanges"`
-	Queues           Queues        `mapstructure:"queues" json:"queues" yaml:"queues"`
-	Producers        Producers     `mapstructure:"producers" json:"producers" yaml:"producers"`
+	DSN            string        `mapstructure:"dsn" json:"dsn" yaml:"dsn"`
+	ReconnectDelay time.Duration `mapstructure:"reconnect_delay" json:"reconnect_delay" yaml:"reconnect_delay"`
+	Exchanges      Exchanges     `mapstructure:"exchanges" json:"exchanges" yaml:"exchanges"`
+	Queues         Queues        `mapstructure:"queues" json:"queues" yaml:"queues"`
+	Producers      Producers     `mapstructure:"producers" json:"producers" yaml:"producers"`
+	Consumers      Consumers     `mapstructure:"consumers" json:"consumers" yaml:"consumers"`
 }
 
 // Traverses the config tree and fixes option keys name.
@@ -81,6 +82,25 @@ type ProducerConfig struct {
 }
 
 func (config ProducerConfig) normalize() {
+	config.Options.normalizeKeys()
+}
+
+type Consumers []ConsumerConfig
+
+func (consumers Consumers) normalize() {
+	for _, consumer := range consumers {
+		consumer.normalize()
+	}
+}
+
+type ConsumerConfig struct {
+	Name    string  `mapstructure:"name" json:"name" yaml:"name"`
+	Queue   string  `mapstructure:"queue" json:"queue" yaml:"queue"`
+	Workers int     `mapstructure:"workers" json:"workers" yaml:"workers"`
+	Options Options `mapstructure:"options" json:"options" yaml:"options"`
+}
+
+func (config ConsumerConfig) normalize() {
 	config.Options.normalizeKeys()
 }
 

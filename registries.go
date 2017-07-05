@@ -1,10 +1,6 @@
 package mq
 
-import (
-	"sync"
-
-	"github.com/NeowayLabs/wabbit"
-)
+import "sync"
 
 func newProducersRegistry(size int) producersRegistry {
 	return producersRegistry{
@@ -31,12 +27,63 @@ func (registry producersRegistry) Set(name string, producer *producer) {
 	registry.Unlock()
 }
 
-func (registry producersRegistry) SetNewChannel(channel wabbit.Channel) {
-	registry.Lock()
+func (registry producersRegistry) GoEach(fn func(*producer)) {
+	wg := &sync.WaitGroup{}
 
-	for _, producer := range registry.producers {
-		producer.setChannel(channel)
+	registry.Lock()
+	defer registry.Unlock()
+
+	wg.Add(len(registry.producers))
+
+	for _, p := range registry.producers {
+		go func() {
+			fn(p)
+			wg.Done()
+		}()
 	}
 
+	wg.Wait()
+}
+
+func newConsumersRegistry(size int) consumersRegistry {
+	return consumersRegistry{
+		consumers: make(map[string]*consumer, size),
+	}
+}
+
+type consumersRegistry struct {
+	sync.Mutex
+	consumers map[string]*consumer
+}
+
+func (registry consumersRegistry) Get(name string) (*consumer, bool) {
+	registry.Lock()
+	consumer, ok := registry.consumers[name]
 	registry.Unlock()
+
+	return consumer, ok
+}
+
+func (registry consumersRegistry) Set(name string, consumer *consumer) {
+	registry.Lock()
+	registry.consumers[name] = consumer
+	registry.Unlock()
+}
+
+func (registry consumersRegistry) GoEach(fn func(*consumer)) {
+	wg := &sync.WaitGroup{}
+
+	registry.Lock()
+	defer registry.Unlock()
+
+	wg.Add(len(registry.consumers))
+
+	for _, c := range registry.consumers {
+		go func() {
+			fn(c)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
 }
