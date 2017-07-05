@@ -1,3 +1,4 @@
+// Package mq provides an ability to integrate with message broker via AMQP in a declarative way.
 package mq
 
 import (
@@ -27,10 +28,13 @@ const (
 	prefetchSize  = 0
 )
 
-func New(config Config) (MQer, error) {
+// New initializes AMQP connection to the message broker
+// and returns adapter that provides an ability
+// to get configured consumers and producers, read occurred errors and shutdown all workers.
+func New(config Config) (MQ, error) {
 	config.normalize()
 
-	mq := &MQ{
+	mq := &mq{
 		errorChannel:         make(chan error),
 		dsn:                  config.DSN,
 		internalErrorChannel: make(chan error),
@@ -48,7 +52,8 @@ func New(config Config) (MQer, error) {
 	return mq, mq.setup(config)
 }
 
-type MQer interface {
+// MQ describes methods provided by message broker adapter.
+type MQ interface {
 	GetConsumer(name string) (Consumer, bool)
 	SetConsumerHandler(name string, handler ConsumerHandler) bool
 	GetProducer(name string) (Producer, bool)
@@ -56,19 +61,19 @@ type MQer interface {
 	Close()
 }
 
-type MQ struct {
+type mq struct {
 	channel              wabbit.Channel
 	connection           wabbit.Conn
 	errorChannel         chan error
 	dsn                  string // We need to store it for reconnect.
 	internalErrorChannel chan error
-	consumers            consumersRegistry
-	producers            producersRegistry
+	consumers            *consumersRegistry
+	producers            *producersRegistry
 	reconnectStatus      int32         // Defines whether client is trying to reconnect or not.
 	reconnectDelay       time.Duration // Delay before reconnect in seconds.
 }
 
-func (mq *MQ) setup(config Config) error {
+func (mq *mq) setup(config Config) error {
 	if err := mq.setupExchanges(config.Exchanges); err != nil {
 		return err
 	}
@@ -88,7 +93,7 @@ func (mq *MQ) setup(config Config) error {
 	return nil
 }
 
-func (mq *MQ) setupExchanges(exchanges Exchanges) error {
+func (mq *mq) setupExchanges(exchanges Exchanges) error {
 	for _, config := range exchanges {
 		if err := mq.declareExchange(config); err != nil {
 			return err
@@ -98,11 +103,11 @@ func (mq *MQ) setupExchanges(exchanges Exchanges) error {
 	return nil
 }
 
-func (mq *MQ) declareExchange(config ExchangeConfig) error {
+func (mq *mq) declareExchange(config ExchangeConfig) error {
 	return mq.channel.ExchangeDeclare(config.Name, config.Type, wabbit.Option(config.Options))
 }
 
-func (mq *MQ) setupQueues(queues Queues) error {
+func (mq *mq) setupQueues(queues Queues) error {
 	for _, config := range queues {
 		if err := mq.declareQueue(config); err != nil {
 			return err
@@ -112,7 +117,7 @@ func (mq *MQ) setupQueues(queues Queues) error {
 	return nil
 }
 
-func (mq *MQ) declareQueue(config QueueConfig) error {
+func (mq *mq) declareQueue(config QueueConfig) error {
 	if _, err := mq.channel.QueueDeclare(config.Name, wabbit.Option(config.Options)); err != nil {
 		return err
 	}
@@ -120,7 +125,7 @@ func (mq *MQ) declareQueue(config QueueConfig) error {
 	return mq.channel.QueueBind(config.Name, config.RoutingKey, config.Exchange, wabbit.Option(config.BindingOptions))
 }
 
-func (mq *MQ) setupProducers(producers Producers) error {
+func (mq *mq) setupProducers(producers Producers) error {
 	for _, config := range producers {
 		if err := mq.registerProducer(config); err != nil {
 			return err
@@ -130,7 +135,7 @@ func (mq *MQ) setupProducers(producers Producers) error {
 	return nil
 }
 
-func (mq *MQ) registerProducer(config ProducerConfig) error {
+func (mq *mq) registerProducer(config ProducerConfig) error {
 	if _, ok := mq.producers.Get(config.Name); ok {
 		return fmt.Errorf(`Producer with name "%s" is already registered`, config.Name)
 	}
@@ -143,7 +148,7 @@ func (mq *MQ) registerProducer(config ProducerConfig) error {
 	return nil
 }
 
-func (mq *MQ) setupConsumers(consumers Consumers) error {
+func (mq *mq) setupConsumers(consumers Consumers) error {
 	for _, config := range consumers {
 		if err := mq.registerConsumer(config); err != nil {
 			return err
@@ -153,7 +158,7 @@ func (mq *MQ) setupConsumers(consumers Consumers) error {
 	return nil
 }
 
-func (mq *MQ) registerConsumer(config ConsumerConfig) error {
+func (mq *mq) registerConsumer(config ConsumerConfig) error {
 	if _, ok := mq.consumers.Get(config.Name); ok {
 		return fmt.Errorf(`Consumer with name "%s" is already registered`, config.Name)
 	}
@@ -179,7 +184,7 @@ func (mq *MQ) registerConsumer(config ConsumerConfig) error {
 	return nil
 }
 
-func (mq *MQ) reconnectConsumer(consumer *consumer) error {
+func (mq *mq) reconnectConsumer(consumer *consumer) error {
 	for _, worker := range consumer.workers {
 		deliveries, err := mq.channel.Consume(consumer.queue, "", consumer.options)
 		if err != nil {
@@ -193,7 +198,7 @@ func (mq *MQ) reconnectConsumer(consumer *consumer) error {
 	return nil
 }
 
-func (mq *MQ) connect() error {
+func (mq *mq) connect() error {
 	connection, err := amqp.Dial(mq.dsn)
 	if err != nil {
 		return err
@@ -223,14 +228,14 @@ func (mq *MQ) connect() error {
 
 // Register close handler.
 // To get more details visit https://godoc.org/github.com/streadway/amqp#Connection.NotifyClose.
-func (mq *MQ) handleCloseEvent() {
+func (mq *mq) handleCloseEvent() {
 	err := <-mq.connection.NotifyClose(make(chan wabbit.Error))
 	if err != nil {
 		mq.internalErrorChannel <- err
 	}
 }
 
-func (mq *MQ) errorHandler() {
+func (mq *mq) errorHandler() {
 	for err := range mq.internalErrorChannel {
 		select {
 		case mq.errorChannel <- err: // Proxies errors to the user.
@@ -242,7 +247,7 @@ func (mq *MQ) errorHandler() {
 	}
 }
 
-func (mq *MQ) processError(err interface{}) {
+func (mq *mq) processError(err interface{}) {
 	switch err.(type) {
 	case *net.OpError:
 		go mq.reconnect()
@@ -258,7 +263,7 @@ func (mq *MQ) processError(err interface{}) {
 
 // Reconnect stops current producers and consumers,
 // recreates connection to the rabbit and than runs producers and consumers.
-func (mq *MQ) reconnect() {
+func (mq *mq) reconnect() {
 	notBusy := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
 	if !notBusy {
 		// There is no need to start a new reconnect if the previous one is not finished yet.
@@ -291,7 +296,7 @@ func (mq *MQ) reconnect() {
 	})
 }
 
-func (mq *MQ) stopWorkers() {
+func (mq *mq) stopWorkers() {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -315,12 +320,12 @@ func (mq *MQ) stopWorkers() {
 }
 
 // GetConsumer returns a consumer by its name or false if consumer wasn't found.
-func (mq *MQ) GetConsumer(name string) (consumer Consumer, ok bool) {
+func (mq *mq) GetConsumer(name string) (consumer Consumer, ok bool) {
 	return mq.consumers.Get(name)
 }
 
 // Set handler for consumer by its name. Returns false if consumer wasn't found.
-func (mq *MQ) SetConsumerHandler(name string, handler ConsumerHandler) bool {
+func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) bool {
 	consumer, ok := mq.GetConsumer(name)
 	if !ok {
 		return false
@@ -332,17 +337,17 @@ func (mq *MQ) SetConsumerHandler(name string, handler ConsumerHandler) bool {
 }
 
 // GetProducer returns a producer by its name or false if producer wasn't found.
-func (mq *MQ) GetProducer(name string) (publisher Producer, ok bool) {
+func (mq *mq) GetProducer(name string) (publisher Producer, ok bool) {
 	return mq.producers.Get(name)
 }
 
 // Error provides an ability to access occurring errors.
-func (mq *MQ) Error() <-chan error {
+func (mq *mq) Error() <-chan error {
 	return mq.errorChannel
 }
 
 // Shutdown all workers and close connection to the message broker.
-func (mq *MQ) Close() {
+func (mq *mq) Close() {
 	mq.stopWorkers()
 
 	if mq.channel != nil {

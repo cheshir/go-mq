@@ -2,6 +2,7 @@ package mq
 
 import "time"
 
+// DeliveryMode describes an AMQP message delivery mode.
 type DeliveryMode int
 
 // List of available values for `delivery_mode` producer option.
@@ -10,6 +11,7 @@ const (
 	Persistent                 = 2
 )
 
+// Config describes all available options for amqp connection creation.
 type Config struct {
 	DSN            string        `mapstructure:"dsn" json:"dsn" yaml:"dsn"`
 	ReconnectDelay time.Duration `mapstructure:"reconnect_delay" json:"reconnect_delay" yaml:"reconnect_delay"`
@@ -26,6 +28,7 @@ func (config Config) normalize() {
 	config.Producers.normalize()
 }
 
+// Exchanges describes configuration list for exchanges.
 type Exchanges []ExchangeConfig
 
 func (exchanges Exchanges) normalize() {
@@ -34,6 +37,7 @@ func (exchanges Exchanges) normalize() {
 	}
 }
 
+// ExchangeConfig describes exchange's configuration.
 type ExchangeConfig struct {
 	Name    string  `mapstructure:"name" json:"name" yaml:"name"`
 	Type    string  `mapstructure:"type" json:"type" yaml:"type"`
@@ -44,6 +48,7 @@ func (config ExchangeConfig) normalize() {
 	config.Options.normalizeKeys()
 }
 
+// Queues describes configuration list for queues.
 type Queues []QueueConfig
 
 func (queues Queues) normalize() {
@@ -52,6 +57,7 @@ func (queues Queues) normalize() {
 	}
 }
 
+// QueueConfig describes queue's configuration.
 type QueueConfig struct {
 	Exchange       string  `mapstructure:"exchange" json:"exchange" yaml:"exchange"`
 	Name           string  `mapstructure:"name" json:"name" yaml:"name"`
@@ -65,6 +71,7 @@ func (config QueueConfig) normalize() {
 	config.Options.normalizeKeys()
 }
 
+// Producers describes configuration list for producers.
 type Producers []ProducerConfig
 
 func (producers Producers) normalize() {
@@ -73,6 +80,7 @@ func (producers Producers) normalize() {
 	}
 }
 
+// ProducerConfig describes producer's configuration.
 type ProducerConfig struct {
 	BufferSize int     `mapstructure:"buffer_size" json:"buffer_size" yaml:"buffer_size"`
 	Exchange   string  `mapstructure:"exchange" json:"exchange" yaml:"exchange"`
@@ -85,6 +93,7 @@ func (config ProducerConfig) normalize() {
 	config.Options.normalizeKeys()
 }
 
+// Consumers describes configuration list for consumers.
 type Consumers []ConsumerConfig
 
 func (consumers Consumers) normalize() {
@@ -93,6 +102,7 @@ func (consumers Consumers) normalize() {
 	}
 }
 
+// ConsumerConfig describes consumer's configuration.
 type ConsumerConfig struct {
 	Name    string  `mapstructure:"name" json:"name" yaml:"name"`
 	Queue   string  `mapstructure:"queue" json:"queue" yaml:"queue"`
@@ -104,6 +114,7 @@ func (config ConsumerConfig) normalize() {
 	config.Options.normalizeKeys()
 }
 
+// Options describes optional configuration.
 type Options map[string]interface{}
 
 // Map from lowercase option name to the expected name.
