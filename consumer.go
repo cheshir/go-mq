@@ -7,12 +7,16 @@ import (
 	"github.com/NeowayLabs/wabbit"
 )
 
+// Consumer describes available methods for consumer.
 type Consumer interface {
 	Consume(handler ConsumerHandler)
 }
 
+// ConsumerHandler describes handler function signature.
+// It will be called for each obtained message.
 type ConsumerHandler func(message Message)
 
+// Message describes available methods of the message obtained from queue.
 type Message interface {
 	Ack(multiple bool) error
 	Nack(multiple, request bool) error
@@ -52,7 +56,7 @@ func (consumer *consumer) Consume(handler ConsumerHandler) {
 	})
 }
 
-// TODO Add wait group.
+// Stop terminates consumer's workers.
 func (consumer *consumer) Stop() {
 	for _, worker := range consumer.workers {
 		worker.Stop()

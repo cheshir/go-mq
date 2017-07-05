@@ -7,6 +7,7 @@ import (
 	"github.com/NeowayLabs/wabbit"
 )
 
+// Producer describes available methods for producer.
 type Producer interface {
 	Produce(data []byte)
 }
