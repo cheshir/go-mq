@@ -54,9 +54,9 @@ func New(config Config) (MQ, error) {
 
 // MQ describes methods provided by message broker adapter.
 type MQ interface {
-	GetConsumer(name string) (Consumer, bool)
-	SetConsumerHandler(name string, handler ConsumerHandler) bool
-	GetProducer(name string) (Producer, bool)
+	GetConsumer(name string) (Consumer, error)
+	SetConsumerHandler(name string, handler ConsumerHandler) error
+	GetProducer(name string) (Producer, error)
 	Error() <-chan error
 	Close()
 }
@@ -319,26 +319,36 @@ func (mq *mq) stopWorkers() {
 	wg.Wait()
 }
 
-// GetConsumer returns a consumer by its name or false if consumer wasn't found.
-func (mq *mq) GetConsumer(name string) (consumer Consumer, ok bool) {
-	return mq.consumers.Get(name)
+// GetConsumer returns a consumer by its name or error if consumer wasn't found.
+func (mq *mq) GetConsumer(name string) (consumer Consumer, err error) {
+	consumer, ok := mq.consumers.Get(name)
+	if !ok {
+		err = fmt.Errorf("Conumer '%s' is not registered. Check your configuration.", name)
+	}
+
+	return
 }
 
 // Set handler for consumer by its name. Returns false if consumer wasn't found.
-func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) bool {
-	consumer, ok := mq.GetConsumer(name)
-	if !ok {
-		return false
+func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
+	consumer, err := mq.GetConsumer(name)
+	if err != nil {
+		return err
 	}
 
 	consumer.Consume(handler)
 
-	return true
+	return nil
 }
 
 // GetProducer returns a producer by its name or false if producer wasn't found.
-func (mq *mq) GetProducer(name string) (publisher Producer, ok bool) {
-	return mq.producers.Get(name)
+func (mq *mq) GetProducer(name string) (publisher Producer, err error) {
+	producer, ok := mq.producers.Get(name)
+	if !ok {
+		err = fmt.Errorf("Producer '%s' is not registered. Check your configuration,")
+	}
+
+	return
 }
 
 // Error provides an ability to access occurring errors.
