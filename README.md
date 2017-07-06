@@ -1,6 +1,7 @@
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
-[![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
+[![Build Status](https://travis-ci.org/cheshir/go-mq.svg?branch=master)](https://travis-ci.org/cheshir/go-mq)
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
+[![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
 
 
 # About

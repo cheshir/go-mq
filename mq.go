@@ -342,10 +342,10 @@ func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
 }
 
 // GetProducer returns a producer by its name or false if producer wasn't found.
-func (mq *mq) GetProducer(name string) (publisher Producer, err error) {
+func (mq *mq) GetProducer(name string) (producer Producer, err error) {
 	producer, ok := mq.producers.Get(name)
 	if !ok {
-		err = fmt.Errorf("Producer '%s' is not registered. Check your configuration,")
+		err = fmt.Errorf("Producer '%s' is not registered. Check your configuration,", name)
 	}
 
 	return
