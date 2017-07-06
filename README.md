@@ -1,4 +1,4 @@
-[![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
 [![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
 
@@ -161,24 +161,23 @@ func main() {
 	defer queue.Close()
 	
 	// Get producer by its name.
-	producer, ok := queue.GetProducer("hello_p")
-	if !ok {
-		panic("Trying to get unknown producer")
+	producer, err := queue.GetProducer("hello_p")
+	if err != nil {
+		panic(err)
 	}
 	
 	body := "hello world!"
 	producer.Produce([]byte(body))
 	
-	consumer, ok := queue.GetConsumer("hello_c")
-	if !ok {
+	consumer, err := queue.GetConsumer("hello_c")
+	if err != nil {
 		panic("Trying to get unknown consumer")
 	}
 	consumer.Consume(handleMessages)
 	
 	// Or you can use a little bit shorter approach:
-	// ok = queue.SetConsumerHandler("hello_c", handleMessages)
-	// if !ok {
-	//	  panic("Can't set handler for consumer hello_c")
+	// if err := queue.SetConsumerHandler("hello_c", handleMessages); err != nil {
+	//	  panic(err)
 	// }
 	
 	select {}
