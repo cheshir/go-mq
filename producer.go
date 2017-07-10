@@ -13,7 +13,7 @@ type Producer interface {
 }
 
 type producer struct {
-	sync.RWMutex    // Protect channel during posting and reconnect.
+	sync.Mutex      // Protect channel during posting and reconnect.
 	channel         wabbit.Channel
 	errorChannel    chan<- error
 	exchange        string
@@ -39,13 +39,6 @@ func newProducer(channel wabbit.Channel, errorChannel chan<- error, config Produ
 	}
 }
 
-// Method safely sets new RMQ channel.
-func (producer *producer) setChannel(channel wabbit.Channel) {
-	producer.Lock()
-	producer.channel = channel
-	producer.Unlock()
-}
-
 func (producer *producer) worker() {
 	atomic.StoreInt32(&producer.status, statusRunning)
 
@@ -55,25 +48,31 @@ func (producer *producer) worker() {
 			err := producer.produce(message)
 			if err != nil {
 				producer.errorChannel <- err
-
-				// TODO make it optional.
-				// TODO check error types. Why the message is broken?
-				producer.resendMutex.Lock()
-				producer.resendChannel <- message
-			}
-		case message := <-producer.resendChannel:
-			err := producer.produce(message)
-			if err != nil {
-				producer.errorChannel <- err
-				producer.resendChannel <- message
-			} else {
-				producer.resendMutex.Unlock()
+				// TODO Resend message.
 			}
 		case <-producer.shutdownChannel:
 			// TODO It is necessary to guarantee the message delivery order.
+			producer.closeChannel()
+
 			return
 		}
 	}
+}
+
+// Method safely sets new RMQ channel.
+func (producer *producer) setChannel(channel wabbit.Channel) {
+	producer.Lock()
+	producer.channel = channel
+	producer.Unlock()
+}
+
+// Close producer's channel.
+func (producer *producer) closeChannel() {
+	producer.Lock()
+	if err := producer.channel.Close(); err != nil {
+		producer.errorChannel <- err
+	}
+	producer.Unlock()
 }
 
 func (producer *producer) Produce(message []byte) {
@@ -81,8 +80,8 @@ func (producer *producer) Produce(message []byte) {
 }
 
 func (producer *producer) produce(message []byte) error {
-	producer.RLock()
-	defer producer.RUnlock()
+	producer.Lock()
+	defer producer.Unlock()
 
 	return producer.channel.Publish(producer.exchange, producer.routingKey, message, producer.options)
 }
@@ -90,8 +89,12 @@ func (producer *producer) produce(message []byte) error {
 // Stops the worker if it is running.
 // TODO Add wait group.
 func (producer *producer) Stop() {
-	needsToShutdown := atomic.CompareAndSwapInt32(&producer.status, statusRunning, statusStopped)
+	needsToShutdown := producer.changeStatusToStoppedAtomic()
 	if needsToShutdown {
 		producer.shutdownChannel <- struct{}{}
 	}
+}
+
+func (producer *producer) changeStatusToStoppedAtomic() (changed bool) {
+	return atomic.CompareAndSwapInt32(&producer.status, statusRunning, statusStopped)
 }

@@ -27,17 +27,19 @@ type Message interface {
 type consumer struct {
 	handler ConsumerHandler
 	once    sync.Once
-	workers []worker
+	workers []*worker
 
-	// Reconnect options.
-	queue   string
-	name    string
-	options wabbit.Option
+	// Options for reconnect.
+	queue         string
+	name          string
+	options       wabbit.Option
+	prefetchCount int
+	prefetchSize  int
 }
 
 func newConsumer(config ConsumerConfig) *consumer {
 	return &consumer{
-		workers: make([]worker, config.Workers),
+		workers: make([]*worker, config.Workers),
 		queue:   config.Queue,
 		name:    config.Name,
 		options: wabbit.Option(config.Options),
@@ -64,40 +66,73 @@ func (consumer *consumer) Stop() {
 }
 
 type worker struct {
+	sync.Mutex      // Protect channel during reconnect.
+	channel         wabbit.Channel
 	deliveries      <-chan wabbit.Delivery
+	errorChannel    chan<- error
 	shutdownChannel chan struct{}
 	status          int32
 }
 
-func newWorker(deliveries <-chan wabbit.Delivery) worker {
-	return worker{
-		deliveries:      deliveries,
+func newWorker(errorChannel chan<- error) *worker {
+	return &worker{
+		errorChannel:    errorChannel,
 		shutdownChannel: make(chan struct{}),
 	}
 }
 
-func (worker worker) Run(handler ConsumerHandler) {
+func (worker *worker) Run(handler ConsumerHandler) {
 	atomic.StoreInt32(&worker.status, statusRunning)
 
 	for {
 		select {
 		case message := <-worker.deliveries:
-			if message == nil { // Channel has been closed.
-				return
+			if message == nil { // Seems like channel was closed.
+				if worker.changeStatusToStoppedAtomic() {
+					// Stop the worker.
+
+					return
+				} else {
+					// Somebody already trying to stop the worker.
+
+					continue
+				}
 			}
 
 			handler(message)
 		case <-worker.shutdownChannel:
+			worker.closeChannel()
+
 			return
 		}
 	}
 }
 
+// Method safely sets new RMQ channel.
+func (worker *worker) setChannel(channel wabbit.Channel) {
+	worker.Lock()
+	worker.channel = channel
+	worker.Unlock()
+}
+
+// Close worker's channel.
+func (worker *worker) closeChannel() {
+	worker.Lock()
+	if err := worker.channel.Close(); err != nil {
+		worker.errorChannel <- err
+	}
+	worker.Unlock()
+}
+
 // Force stop.
 // TODO Add wait group.
-func (worker worker) Stop() {
-	needsToShutdown := atomic.CompareAndSwapInt32(&worker.status, statusRunning, statusStopped)
+func (worker *worker) Stop() {
+	needsToShutdown := worker.changeStatusToStoppedAtomic()
 	if needsToShutdown {
 		worker.shutdownChannel <- struct{}{}
 	}
+}
+
+func (worker *worker) changeStatusToStoppedAtomic() (changed bool) {
+	return atomic.CompareAndSwapInt32(&worker.status, statusRunning, statusStopped)
 }
