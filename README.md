@@ -241,6 +241,8 @@ consumers:
   - name: "consumer_name"
     queue: "queue_name"
     workers: 1                           # Workers count. Defaults to 1.
+    prefetch_count: 0                    # Prefetch message count per worker.
+    prefetch_size: 0                     # Prefetch message size per worker.
     # Available options with default values:
     options:
       no_ack: false

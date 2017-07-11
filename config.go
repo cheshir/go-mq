@@ -104,10 +104,12 @@ func (consumers Consumers) normalize() {
 
 // ConsumerConfig describes consumer's configuration.
 type ConsumerConfig struct {
-	Name    string  `mapstructure:"name" json:"name" yaml:"name"`
-	Queue   string  `mapstructure:"queue" json:"queue" yaml:"queue"`
-	Workers int     `mapstructure:"workers" json:"workers" yaml:"workers"`
-	Options Options `mapstructure:"options" json:"options" yaml:"options"`
+	Name          string  `mapstructure:"name" json:"name" yaml:"name"`
+	Queue         string  `mapstructure:"queue" json:"queue" yaml:"queue"`
+	Workers       int     `mapstructure:"workers" json:"workers" yaml:"workers"`
+	Options       Options `mapstructure:"options" json:"options" yaml:"options"`
+	PrefetchCount int     `mapstructure:"prefetch_count" json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize  int     `mapstructure:"prefetch_size" json:"prefetch_size" yaml:"prefetch_size"`
 }
 
 func (config ConsumerConfig) normalize() {
