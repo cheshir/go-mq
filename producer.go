@@ -2,7 +2,6 @@ package mq
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/NeowayLabs/wabbit"
 )
@@ -13,7 +12,9 @@ type Producer interface {
 }
 
 type producer struct {
-	sync.Mutex      // Protect channel during posting and reconnect.
+	sync.Mutex // Protect channel during posting and reconnect.
+	workerStatus
+
 	channel         wabbit.Channel
 	errorChannel    chan<- error
 	exchange        string
@@ -23,7 +24,6 @@ type producer struct {
 	resendChannel   chan []byte
 	routingKey      string
 	shutdownChannel chan struct{}
-	status          int32 // Defines worker state: running or stopped.
 }
 
 func newProducer(channel wabbit.Channel, errorChannel chan<- error, config ProducerConfig) *producer {
@@ -40,7 +40,7 @@ func newProducer(channel wabbit.Channel, errorChannel chan<- error, config Produ
 }
 
 func (producer *producer) worker() {
-	atomic.StoreInt32(&producer.status, statusRunning)
+	producer.markAsRunning()
 
 	for {
 		select {
@@ -89,12 +89,7 @@ func (producer *producer) produce(message []byte) error {
 // Stops the worker if it is running.
 // TODO Add wait group.
 func (producer *producer) Stop() {
-	needsToShutdown := producer.changeStatusToStoppedAtomic()
-	if needsToShutdown {
+	if producer.markAsStoppedIfCan() {
 		producer.shutdownChannel <- struct{}{}
 	}
-}
-
-func (producer *producer) changeStatusToStoppedAtomic() (changed bool) {
-	return atomic.CompareAndSwapInt32(&producer.status, statusRunning, statusStopped)
 }

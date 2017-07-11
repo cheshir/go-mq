@@ -16,10 +16,6 @@ const (
 	// Describes states during reconnect.
 	statusReadyForReconnect int32 = 0
 	statusReconnecting            = 1
-
-	// Describes worker states.
-	statusStopped = 0
-	statusRunning = 1
 )
 
 // MQ describes methods provided by message broker adapter.
