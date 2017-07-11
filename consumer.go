@@ -87,13 +87,13 @@ func (worker *worker) Run(handler ConsumerHandler) {
 	for {
 		select {
 		case message := <-worker.deliveries:
-			if message == nil { // Seems like channel was closed.
-				if worker.changeStatusToStoppedAtomic() {
+			if message == nil { // It seems like channel was closed.
+				if worker.hasChangedStatusToStoppedAtomic() {
 					// Stop the worker.
 
 					return
 				} else {
-					// Somebody already trying to stop the worker.
+					// Somebody is already trying to stop the worker.
 
 					continue
 				}
@@ -127,12 +127,12 @@ func (worker *worker) closeChannel() {
 // Force stop.
 // TODO Add wait group.
 func (worker *worker) Stop() {
-	needsToShutdown := worker.changeStatusToStoppedAtomic()
+	needsToShutdown := worker.hasChangedStatusToStoppedAtomic()
 	if needsToShutdown {
 		worker.shutdownChannel <- struct{}{}
 	}
 }
 
-func (worker *worker) changeStatusToStoppedAtomic() (changed bool) {
+func (worker *worker) hasChangedStatusToStoppedAtomic() (changed bool) {
 	return atomic.CompareAndSwapInt32(&worker.status, statusRunning, statusStopped)
 }
