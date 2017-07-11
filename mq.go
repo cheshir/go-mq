@@ -69,7 +69,7 @@ func New(config Config) (MQ, error) {
 func (mq *mq) GetConsumer(name string) (consumer Consumer, err error) {
 	consumer, ok := mq.consumers.Get(name)
 	if !ok {
-		err = fmt.Errorf("Conumer '%s' is not registered. Check your configuration.", name)
+		err = fmt.Errorf("Consumer '%s' is not registered. Check your configuration.", name)
 	}
 
 	return
@@ -150,7 +150,7 @@ func (mq *mq) errorHandler() {
 		select {
 		case mq.errorChannel <- err: // Proxies errors to the user.
 		default: // Drop errors if channel buffer is full.
-			// TODO It probably makes sense to make it optional or even remove.
+			// TODO It probably makes sense to make it optional or even remove it.
 		}
 
 		mq.processError(err)
