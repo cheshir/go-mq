@@ -2,7 +2,6 @@ package mq
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/NeowayLabs/wabbit"
 )
@@ -66,12 +65,13 @@ func (consumer *consumer) Stop() {
 }
 
 type worker struct {
-	sync.Mutex      // Protect channel during reconnect.
+	sync.Mutex // Protect channel during reconnect.
+	workerStatus
+
 	channel         wabbit.Channel
 	deliveries      <-chan wabbit.Delivery
 	errorChannel    chan<- error
 	shutdownChannel chan struct{}
-	status          int32
 }
 
 func newWorker(errorChannel chan<- error) *worker {
@@ -82,13 +82,13 @@ func newWorker(errorChannel chan<- error) *worker {
 }
 
 func (worker *worker) Run(handler ConsumerHandler) {
-	atomic.StoreInt32(&worker.status, statusRunning)
+	worker.markAsRunning()
 
 	for {
 		select {
 		case message := <-worker.deliveries:
 			if message == nil { // It seems like channel was closed.
-				if worker.hasChangedStatusToStoppedAtomic() {
+				if worker.markAsStoppedIfCan() {
 					// Stop the worker.
 
 					return
@@ -127,12 +127,7 @@ func (worker *worker) closeChannel() {
 // Force stop.
 // TODO Add wait group.
 func (worker *worker) Stop() {
-	needsToShutdown := worker.hasChangedStatusToStoppedAtomic()
-	if needsToShutdown {
+	if worker.markAsStoppedIfCan() {
 		worker.shutdownChannel <- struct{}{}
 	}
-}
-
-func (worker *worker) hasChangedStatusToStoppedAtomic() (changed bool) {
-	return atomic.CompareAndSwapInt32(&worker.status, statusRunning, statusStopped)
 }
