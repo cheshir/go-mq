@@ -1,12 +1,19 @@
 language: go
 
+services:
+  - rabbitmq
+
 gobuild_args: -race
 
 go:
-  - 1.6
   - 1.7
   - 1.8.x
 
 script:
   - gofmt -d -s .
   - go vet *.go
+  - go test -v -mock-broker=0 # Run tests with real broker.
+  - go test -v -coverprofile=coverage.txt -covermode=atomic -mock-broker=1 # Run tests with fake broker and collect coverage.
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

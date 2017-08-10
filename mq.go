@@ -9,6 +9,8 @@ import (
 
 	"github.com/NeowayLabs/wabbit"
 	"github.com/NeowayLabs/wabbit/amqp"
+	"github.com/NeowayLabs/wabbit/amqptest"
+	"github.com/NeowayLabs/wabbit/utils"
 	amqpDriver "github.com/streadway/amqp"
 )
 
@@ -17,6 +19,9 @@ const (
 	statusReadyForReconnect int32 = 0
 	statusReconnecting            = 1
 )
+
+// Used for creating connection to the fake AMQP server for tests.
+var brokerIsMocked bool
 
 // MQ describes methods provided by message broker adapter.
 type MQ interface {
@@ -27,10 +32,16 @@ type MQ interface {
 	Close()
 }
 
+type conn interface {
+	Channel() (wabbit.Channel, error)
+	Close() error
+	NotifyClose(chan wabbit.Error) chan wabbit.Error
+}
+
 type mq struct {
 	channel              wabbit.Channel
 	config               Config
-	connection           wabbit.Conn
+	connection           conn
 	errorChannel         chan error
 	internalErrorChannel chan error
 	consumers            *consumersRegistry
@@ -112,7 +123,7 @@ func (mq *mq) Close() {
 }
 
 func (mq *mq) connect() error {
-	connection, err := amqp.Dial(mq.config.DSN)
+	connection, err := mq.createConnection()
 	if err != nil {
 		return err
 	}
@@ -130,6 +141,14 @@ func (mq *mq) connect() error {
 	go mq.handleCloseEvent()
 
 	return nil
+}
+
+func (mq *mq) createConnection() (conn conn, err error) {
+	if brokerIsMocked {
+		return amqptest.Dial(mq.config.DSN)
+	}
+
+	return amqp.Dial(mq.config.DSN)
 }
 
 // Register close handler.
@@ -156,6 +175,8 @@ func (mq *mq) errorHandler() {
 func (mq *mq) processError(err interface{}) {
 	switch err.(type) {
 	case *net.OpError:
+		go mq.reconnect()
+	case *utils.Error: // Broken connection. Used in tests.
 		go mq.reconnect()
 	case *amqpDriver.Error:
 		rmqErr, _ := err.(*amqpDriver.Error)
