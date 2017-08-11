@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/cheshir/go-mq.svg?branch=master)](https://travis-ci.org/cheshir/go-mq)
+[![codecov](https://codecov.io/gh/cheshir/go-mq/branch/master/graph/badge.svg)](https://codecov.io/gh/cheshir/go-mq)
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
 [![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
@@ -289,6 +290,17 @@ If channel is full – new errors will be dropped.
 go-mq will try to reconnect on closed connection or network error. 
 
 You can set delay between each try with `reconnect_delay` option.
+
+# Tests
+
+There are some cases that can only be tested with real broker 
+and some cases that can only be tested with mocked broker.
+ 
+If you are able to run tests with a real broker run them with:
+
+`go test -mock-broker=0`
+
+Otherwise mock will be used.
 
 ## Epilogue
 

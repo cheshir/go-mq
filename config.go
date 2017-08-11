@@ -26,6 +26,7 @@ func (config Config) normalize() {
 	config.Exchanges.normalize()
 	config.Queues.normalize()
 	config.Producers.normalize()
+	config.Consumers.normalize()
 }
 
 // Exchanges describes configuration list for exchanges.
