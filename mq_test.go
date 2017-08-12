@@ -1,7 +1,3 @@
-// +build !race
-
-// There is some issue with wabbit that causes a data races
-// so we mute race detector until issue is fixed.
 package mq
 
 import (
@@ -118,8 +114,7 @@ func TestMq_ProduceConsume(t *testing.T) {
 	assertNoMqError(t, mq)
 }
 
-// Enable this test when issue with data races will be fixed.
-func testMq_Reconnect(t *testing.T) {
+func TestMq_Reconnect(t *testing.T) {
 	if !brokerIsMocked {
 		t.Skip("We can't stop real broker from test.")
 	}
@@ -146,6 +141,7 @@ func testMq_Reconnect(t *testing.T) {
 			RoutingKey: defaultRoutingKey,
 		}},
 		Producers: Producers{{
+			BufferSize: 1,
 			Name:       defaultProducerName,
 			Exchange:   defaultExchangeName,
 			RoutingKey: defaultRoutingKey,
@@ -170,7 +166,6 @@ func testMq_Reconnect(t *testing.T) {
 	})
 
 	broker.Stop() // Force reconnect.
-
 	assertMqError(t, mq, "Expected to get broken connection error but got nothing")
 
 	producer, err := mq.GetProducer(defaultProducerName)
@@ -244,7 +239,7 @@ func TestMq_GetConsumer_NonExistent(t *testing.T) {
 
 	_, err = mq.GetConsumer("nonexistent_consumer")
 	if err == nil {
-		t.Error("No error got during getting non existent consumer")
+		t.Error("Did not catch an error during the retrieval of non-existent consumer.")
 	}
 
 	assertNoMqError(t, mq)
@@ -389,7 +384,7 @@ func TestMq_New_InvalidConsumerConfiguration(t *testing.T) {
 }
 
 func assertMqError(t *testing.T, mq MQ, message string) {
-	timer := time.NewTimer(200 * time.Millisecond)
+	timer := time.NewTimer(300 * time.Millisecond)
 	select {
 	case <-mq.Error():
 		timer.Stop()

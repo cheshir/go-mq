@@ -92,11 +92,10 @@ func (worker *worker) Run(handler ConsumerHandler) {
 					// Stop the worker.
 
 					return
-				} else {
-					// Somebody is already trying to stop the worker.
-
-					continue
 				}
+
+				// Somebody is already trying to stop the worker.
+				continue
 			}
 
 			handler(message)
