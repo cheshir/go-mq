@@ -124,7 +124,8 @@ func TestMq_Reconnect(t *testing.T) {
 	defer broker.Stop()
 
 	mq, err := New(Config{
-		DSN: dsnForTests,
+		DSN:            dsnForTests,
+		ReconnectDelay: time.Nanosecond,
 		Consumers: Consumers{{
 			Name:          defaultConsumerName,
 			Queue:         defaultQueueName,
@@ -166,7 +167,6 @@ func TestMq_Reconnect(t *testing.T) {
 	})
 
 	broker.Stop() // Force reconnect.
-	assertMqError(t, mq, "Expected to get broken connection error but got nothing")
 
 	producer, err := mq.GetProducer(defaultProducerName)
 	if err != nil {
@@ -383,16 +383,6 @@ func TestMq_New_InvalidConsumerConfiguration(t *testing.T) {
 	}
 }
 
-func assertMqError(t *testing.T, mq MQ, message string) {
-	timer := time.NewTimer(300 * time.Millisecond)
-	select {
-	case <-mq.Error():
-		timer.Stop()
-	case <-timer.C:
-		t.Error(message)
-	}
-}
-
 func assertNoMqError(t *testing.T, mq MQ) {
 	select {
 	case err := <-mq.Error():
@@ -402,7 +392,7 @@ func assertNoMqError(t *testing.T, mq MQ) {
 }
 
 func waitForMessageDelivery() {
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 }
 
 func isSliceOfBytesIsEqual(expected, actual []byte) bool {
