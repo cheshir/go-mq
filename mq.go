@@ -162,12 +162,7 @@ func (mq *mq) handleCloseEvent() {
 
 func (mq *mq) errorHandler() {
 	for err := range mq.internalErrorChannel {
-		select {
-		case mq.errorChannel <- err: // Proxies errors to the user.
-		default: // Drop errors if channel buffer is full.
-			// TODO It probably makes sense to make it optional or even remove it.
-		}
-
+		mq.errorChannel <- err // Proxies errors to the user.
 		mq.processError(err)
 	}
 }
