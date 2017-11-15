@@ -6,8 +6,8 @@ services:
 gobuild_args: -race
 
 go:
-  - 1.7
   - 1.8.x
+  - 1.9.x
 
 script:
   - gofmt -d -s .
