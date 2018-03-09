@@ -69,6 +69,9 @@ func TestMq_ProduceConsume(t *testing.T) {
 			RoutingKey: defaultRoutingKey,
 			Options: Options{
 				"durable": false,
+				"args": map[interface{}]interface{}{
+					"x-max-priority": byte(9),
+				},
 			},
 		}},
 		Producers: Producers{{
@@ -203,6 +206,11 @@ func TestMq_GetConsumer_Existent(t *testing.T) {
 		Queues: Queues{{
 			Name:     defaultQueueName,
 			Exchange: defaultExchangeName,
+			Options: Options{
+				"args": map[interface{}]interface{}{
+					"x-max-priority": byte(9),
+				},
+			},
 		}},
 	})
 
@@ -261,6 +269,11 @@ func TestMq_GetProducer_Existent(t *testing.T) {
 		Queues: Queues{{
 			Name:     defaultQueueName,
 			Exchange: defaultExchangeName,
+			Options: Options{
+				"args": map[interface{}]interface{}{
+					"x-max-priority": byte(9),
+				},
+			},
 		}},
 		Producers: Producers{{
 			Name:     defaultProducerName,

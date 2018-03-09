@@ -1,6 +1,10 @@
 package mq
 
-import "time"
+import (
+	"time"
+
+	"github.com/streadway/amqp"
+)
 
 // DeliveryMode describes an AMQP message delivery mode.
 type DeliveryMode int
@@ -70,6 +74,7 @@ type QueueConfig struct {
 func (config QueueConfig) normalize() {
 	config.BindingOptions.normalizeKeys()
 	config.Options.normalizeKeys()
+	config.Options.buildArgs()
 }
 
 // Producers describes configuration list for producers.
@@ -147,5 +152,18 @@ func (options Options) normalizeKeys() {
 			delete(options, name)
 			options[correctName] = value
 		}
+	}
+}
+
+// Build extra arguments table
+func (options Options) buildArgs() {
+	if _, ok := options["args"]; ok {
+		args := amqp.Table{}
+
+		for k, v := range options["args"].(map[interface{}]interface{}) {
+			args[k.(string)] = v
+		}
+
+		options["args"] = args
 	}
 }
