@@ -161,7 +161,14 @@ func (options Options) buildArgs() {
 		args := amqp.Table{}
 
 		for k, v := range options["args"].(map[interface{}]interface{}) {
-			args[k.(string)] = v
+			switch v := v.(type) {
+			case int:
+				// The underlying amqp library doesn't support `int` types in args,
+				// so we need convert all `int` types to supported `int64` type.
+				args[k.(string)] = int64(v)
+			default:
+				args[k.(string)] = v
+			}
 		}
 
 		options["args"] = args
