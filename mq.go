@@ -76,7 +76,7 @@ func New(config Config) (MQ, error) {
 func (mq *mq) GetConsumer(name string) (consumer Consumer, err error) {
 	consumer, ok := mq.consumers.Get(name)
 	if !ok {
-		err = fmt.Errorf("Consumer '%s' is not registered. Check your configuration.", name)
+		err = fmt.Errorf("consumer '%s' is not registered. Check your configuration", name)
 	}
 
 	return
