@@ -1,12 +1,14 @@
 package mq
 
 import (
+	"encoding/json"
 	"flag"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/NeowayLabs/wabbit/amqptest/server"
+	"gopkg.in/yaml.v1"
 )
 
 const (
@@ -45,7 +47,94 @@ func TestMq_ProduceConsume(t *testing.T) {
 		defer broker.Stop()
 	}
 
-	mq, err := New(Config{
+	cases := []struct {
+		Name   string
+		Config func() (Config, error)
+	}{
+		{
+			"with internal struct config",
+			func() (Config, error) {
+				return newDefaultConfig(), nil
+			},
+		},
+		{
+			"with json config",
+			func() (Config, error) {
+				marshaled, err := json.Marshal(newDefaultConfig())
+				if err != nil {
+					t.Fatalf("Failed to marshal config to JSON: %v", err)
+				}
+
+				config := Config{}
+				if err = json.Unmarshal(marshaled, &config); err != nil {
+					t.Fatalf("Failed to unmarshal test data: %v", err)
+				}
+
+				return config, nil
+			},
+		},
+		{
+			"with yaml config",
+			func() (Config, error) {
+				marshaled, err := yaml.Marshal(newDefaultConfig())
+				if err != nil {
+					t.Fatalf("Failed to marshal config to yaml: %v", err)
+				}
+
+				config := Config{}
+				if err = yaml.Unmarshal(marshaled, &config); err != nil {
+					t.Fatalf("Failed to unmarshal test data: %v", err)
+				}
+
+				return config, err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			config, err := tc.Config()
+			if err != nil {
+				t.Fatalf("Failed to get config for test: %v", err)
+			}
+
+			mq, err := New(config)
+			if err != nil {
+				t.Fatalf("Failed to create a new instance of mq: %v", err)
+			}
+			defer mq.Close()
+
+			expectedMessage := []byte("test")
+
+			producer, err := mq.GetProducer(defaultProducerName)
+			if err != nil {
+				t.Fatal("Failed to get registered producer")
+			}
+
+			producer.Produce(expectedMessage)
+
+			var messageWasRead int32
+			mq.SetConsumerHandler(defaultConsumerName, func(message Message) {
+				atomic.StoreInt32(&messageWasRead, 1)
+
+				if !isSliceOfBytesIsEqual(expectedMessage, message.Body()) {
+					t.Errorf("Actual message '%s' is not equal to expected '%s'", message.Body(), expectedMessage)
+				}
+			})
+
+			waitForMessageDelivery()
+
+			if atomic.LoadInt32(&messageWasRead) != 1 {
+				t.Error("Consumer did not read the message")
+			}
+
+			assertNoMqError(t, mq)
+		})
+	}
+}
+
+func newDefaultConfig() Config {
+	return Config{
 		DSN: dsnForTests,
 		Consumers: Consumers{{
 			Name:          defaultConsumerName,
@@ -53,7 +142,7 @@ func TestMq_ProduceConsume(t *testing.T) {
 			PrefetchCount: 1,
 			Workers:       4,
 			Options: Options{
-				"no_local": true, // Just for example
+				"no_local": false, // Just for example.
 			},
 		}},
 		Exchanges: Exchanges{{
@@ -69,8 +158,8 @@ func TestMq_ProduceConsume(t *testing.T) {
 			RoutingKey: defaultRoutingKey,
 			Options: Options{
 				"durable": false,
-				"args": map[interface{}]interface{}{
-					"x-max-priority": byte(9),
+				"args": map[string]interface{}{
+					"x-max-priority": 9,
 				},
 			},
 		}},
@@ -82,39 +171,7 @@ func TestMq_ProduceConsume(t *testing.T) {
 				"delivery_mode": 1,
 			},
 		}},
-	})
-
-	if err != nil {
-		t.Error("Can't create a new instance of mq: ", err)
 	}
-
-	defer mq.Close()
-
-	expectedMessage := []byte("test")
-
-	producer, err := mq.GetProducer(defaultProducerName)
-	if err != nil {
-		t.Error("Failed to get registered producer")
-	}
-
-	producer.Produce(expectedMessage)
-
-	var messageWasRead int32
-	mq.SetConsumerHandler(defaultConsumerName, func(message Message) {
-		atomic.StoreInt32(&messageWasRead, 1)
-
-		if !isSliceOfBytesIsEqual(expectedMessage, message.Body()) {
-			t.Errorf("Actual message '%s' is not equal to expected '%s'", message.Body(), expectedMessage)
-		}
-	})
-
-	waitForMessageDelivery()
-
-	if atomic.LoadInt32(&messageWasRead) != 1 {
-		t.Error("Consumer did not read the message")
-	}
-
-	assertNoMqError(t, mq)
 }
 
 func TestMq_Reconnect(t *testing.T) {
@@ -126,31 +183,7 @@ func TestMq_Reconnect(t *testing.T) {
 	broker.Start()
 	defer broker.Stop()
 
-	mq, err := New(Config{
-		DSN:            dsnForTests,
-		ReconnectDelay: time.Nanosecond,
-		Consumers: Consumers{{
-			Name:          defaultConsumerName,
-			Queue:         defaultQueueName,
-			PrefetchCount: 1,
-			Workers:       4,
-		}},
-		Exchanges: Exchanges{{
-			Name: defaultExchangeName,
-			Type: defaultExchangeType,
-		}},
-		Queues: Queues{{
-			Name:       defaultQueueName,
-			Exchange:   defaultExchangeName,
-			RoutingKey: defaultRoutingKey,
-		}},
-		Producers: Producers{{
-			BufferSize: 1,
-			Name:       defaultProducerName,
-			Exchange:   defaultExchangeName,
-			RoutingKey: defaultRoutingKey,
-		}},
-	})
+	mq, err := New(newDefaultConfig())
 
 	if err != nil {
 		t.Error("Can't create a new instance of mq: ", err)

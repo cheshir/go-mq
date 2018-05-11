@@ -155,22 +155,53 @@ func (options Options) normalizeKeys() {
 	}
 }
 
-// Build extra arguments table
+// Build extra arguments table.
 func (options Options) buildArgs() {
-	if _, ok := options["args"]; ok {
-		args := amqp.Table{}
-
-		for k, v := range options["args"].(map[interface{}]interface{}) {
-			switch v := v.(type) {
-			case int:
-				// The underlying amqp library doesn't support `int` types in args,
-				// so we need convert all `int` types to supported `int64` type.
-				args[k.(string)] = int64(v)
-			default:
-				args[k.(string)] = v
-			}
-		}
-
-		options["args"] = args
+	if _, ok := options["args"]; !ok {
+		return
 	}
+
+	args := options.convertArgsToAMQPTable(options["args"])
+	args = options.fixArgsValuesTypes(args)
+	options["args"] = args
+}
+
+// json and yaml packages unmarshal maps into the different types.
+// If we want support both formats we should catch both cases.
+func (options Options) convertArgsToAMQPTable(args interface{}) amqp.Table {
+	var table amqp.Table
+
+	switch arguments := args.(type) {
+	case map[string]interface{}:
+		table = amqp.Table(arguments)
+	case map[interface{}]interface{}:
+		table = make(amqp.Table, len(arguments))
+
+		for k, v := range arguments {
+			table[k.(string)] = v
+		}
+	}
+
+	return table
+}
+
+// The underlying amqp library doesn't support `int` types in args,
+// so we need convert all `int` types to supported type.
+// Another one known case is that x-max-priority must be an int not double,
+// but by default json unmarshals numbers as float.
+func (options Options) fixArgsValuesTypes(args amqp.Table) amqp.Table {
+	for k, v := range args {
+		switch v2 := v.(type) {
+		case int:
+			args[k] = int32(v2)
+		case float64:
+			if k == "x-max-priority" {
+				args[k] = int64(v2)
+			}
+		default:
+			args[k] = v
+		}
+	}
+
+	return args
 }
