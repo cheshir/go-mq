@@ -98,7 +98,7 @@ func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
 func (mq *mq) GetProducer(name string) (producer Producer, err error) {
 	producer, ok := mq.producers.Get(name)
 	if !ok {
-		err = fmt.Errorf("Producer '%s' is not registered. Check your configuration,", name)
+		err = fmt.Errorf("producer '%s' is not registered. Check your configuration", name)
 	}
 
 	return
@@ -162,7 +162,11 @@ func (mq *mq) handleCloseEvent() {
 
 func (mq *mq) errorHandler() {
 	for err := range mq.internalErrorChannel {
-		mq.errorChannel <- err // Proxies errors to the user.
+		select {
+		case mq.errorChannel <- err: // Proxies errors to the user.
+		default: // For that clients who don't read errors.
+		}
+
 		mq.processError(err)
 	}
 }
@@ -268,7 +272,7 @@ func (mq *mq) setupProducers() error {
 
 func (mq *mq) registerProducer(config ProducerConfig) error {
 	if _, ok := mq.producers.Get(config.Name); ok {
-		return fmt.Errorf(`Producer with name "%s" is already registered`, config.Name)
+		return fmt.Errorf(`producer with name "%s" is already registered`, config.Name)
 	}
 
 	channel, err := mq.connection.Channel()
@@ -308,7 +312,7 @@ func (mq *mq) setupConsumers() error {
 
 func (mq *mq) registerConsumer(config ConsumerConfig) error {
 	if _, ok := mq.consumers.Get(config.Name); ok {
-		return fmt.Errorf(`Consumer with name "%s" is already registered`, config.Name)
+		return fmt.Errorf(`consumer with name "%s" is already registered`, config.Name)
 	}
 
 	// Consumer must have at least one worker.
