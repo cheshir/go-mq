@@ -20,8 +20,6 @@ type producer struct {
 	exchange        string
 	options         wabbit.Option
 	publishChannel  chan []byte
-	resendMutex     sync.Mutex
-	resendChannel   chan []byte
 	routingKey      string
 	shutdownChannel chan struct{}
 }
@@ -33,7 +31,6 @@ func newProducer(channel wabbit.Channel, errorChannel chan<- error, config Produ
 		exchange:        config.Exchange,
 		options:         wabbit.Option(config.Options),
 		publishChannel:  make(chan []byte, config.BufferSize),
-		resendChannel:   make(chan []byte, 1),
 		routingKey:      config.RoutingKey,
 		shutdownChannel: make(chan struct{}),
 	}

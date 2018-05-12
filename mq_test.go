@@ -181,9 +181,32 @@ func TestMq_Reconnect(t *testing.T) {
 
 	broker := server.NewServer(dsnForTests)
 	broker.Start()
-	defer broker.Stop()
 
-	mq, err := New(newDefaultConfig())
+	mq, err := New(Config{
+		DSN:            dsnForTests,
+		ReconnectDelay: time.Nanosecond,
+		Consumers: Consumers{{
+			Name:          defaultConsumerName,
+			Queue:         defaultQueueName,
+			PrefetchCount: 1,
+			Workers:       4,
+		}},
+		Exchanges: Exchanges{{
+			Name: defaultExchangeName,
+			Type: defaultExchangeType,
+		}},
+		Queues: Queues{{
+			Name:       defaultQueueName,
+			Exchange:   defaultExchangeName,
+			RoutingKey: defaultRoutingKey,
+		}},
+		Producers: Producers{{
+			BufferSize: 1,
+			Name:       defaultProducerName,
+			Exchange:   defaultExchangeName,
+			RoutingKey: defaultRoutingKey,
+		}},
+	})
 
 	if err != nil {
 		t.Error("Can't create a new instance of mq: ", err)
@@ -212,6 +235,8 @@ func TestMq_Reconnect(t *testing.T) {
 	producer.Produce(expectedMessage)
 
 	broker.Start()
+	defer broker.Stop()
+
 	waitForMessageDelivery()
 
 	if atomic.LoadInt32(&messageWasRead) != 1 {
@@ -438,7 +463,7 @@ func assertNoMqError(t *testing.T, mq MQ) {
 }
 
 func waitForMessageDelivery() {
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 }
 
 func isSliceOfBytesIsEqual(expected, actual []byte) bool {
