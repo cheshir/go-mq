@@ -8,6 +8,7 @@ import (
 
 // Consumer describes available methods for consumer.
 type Consumer interface {
+	// Consume runs consumer's workers with specified handler.
 	Consume(handler ConsumerHandler)
 }
 
