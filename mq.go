@@ -81,6 +81,7 @@ func New(config Config) (MQ, error) {
 }
 
 // Set handler for consumer by its name. Returns false if consumer wasn't found.
+// Can be called once for each consumer.
 func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
 	consumer, err := mq.Consumer(name)
 	if err != nil {
@@ -193,7 +194,7 @@ func (mq *mq) errorHandler() {
 	}
 }
 
-func (mq *mq) processError(err interface{}) {
+func (mq *mq) processError(err error) {
 	switch err.(type) {
 	case *net.OpError:
 		go mq.reconnect()
@@ -205,7 +206,11 @@ func (mq *mq) processError(err interface{}) {
 			go mq.reconnect()
 		}
 	default:
-		// There is no special behaviour for other errors.
+		// Wabbit error. Means that server is down.
+		// Used in tests.
+		if err.Error() == "Network unreachable" {
+			go mq.reconnect()
+		}
 	}
 }
 
@@ -365,9 +370,9 @@ func (mq *mq) reconnectConsumer(consumer *consumer) error {
 		if err := mq.initializeConsumersWorker(consumer, worker); err != nil {
 			return err
 		}
-
-		go worker.Run(consumer.handler)
 	}
+
+	consumer.consume(consumer.handler)
 
 	return nil
 }
@@ -396,9 +401,9 @@ func (mq *mq) initializeConsumersWorker(consumer *consumer, worker *worker) erro
 // Reconnect stops current producers and consumers,
 // recreates connection to the rabbit and than runs producers and consumers.
 func (mq *mq) reconnect() {
-	notBusy := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
-	if !notBusy {
-		// There is no need to start a new reconnect if the previous one is not finished yet.
+	startedReconnect := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
+	// There is no need to start a new reconnect if the previous one is not finished yet.
+	if !startedReconnect {
 		return
 	}
 

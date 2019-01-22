@@ -246,8 +246,6 @@ func TestMq_Reconnect(t *testing.T) {
 		t.Fatal("Can't create a new instance of mq: ", err)
 	}
 
-	defer messageQueue.Close()
-
 	expectedMessage := []byte("test")
 
 	var messageWasRead int32
@@ -281,11 +279,6 @@ func TestMq_Reconnect(t *testing.T) {
 	broker.Start()
 	defer broker.Stop()
 
-	queue := messageQueue.(*mq)
-	for atomic.LoadInt32(&queue.reconnectStatus) != statusReadyForReconnect {
-		time.Sleep(10 * time.Millisecond)
-	}
-
 	waitForMessageDelivery()
 
 	readMessages := atomic.LoadInt32(&messageWasRead)
@@ -293,6 +286,8 @@ func TestMq_Reconnect(t *testing.T) {
 		// Probably known problem. Check https://github.com/cheshir/go-mq/issues/25 for details.
 		t.Errorf("Consumer did not read messages. Produced %d, read %d", 2, readMessages)
 	}
+
+	messageQueue.Close()
 }
 
 func TestMq_Consumer_Exists(t *testing.T) {

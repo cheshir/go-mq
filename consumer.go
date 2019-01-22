@@ -50,12 +50,16 @@ func newConsumer(config ConsumerConfig) *consumer {
 // Can be called only once.
 func (consumer *consumer) Consume(handler ConsumerHandler) {
 	consumer.once.Do(func() {
-		consumer.handler = handler
-
-		for _, worker := range consumer.workers {
-			go worker.Run(handler)
-		}
+		consumer.consume(handler)
 	})
+}
+
+func (consumer *consumer) consume(handler ConsumerHandler) {
+	consumer.handler = handler
+
+	for _, worker := range consumer.workers {
+		go worker.Run(handler)
+	}
 }
 
 // Stop terminates consumer's workers.
@@ -125,7 +129,6 @@ func (worker *worker) closeChannel() {
 }
 
 // Force stop.
-// TODO Add wait group.
 func (worker *worker) Stop() {
 	if worker.markAsStoppedIfCan() {
 		worker.shutdownChannel <- struct{}{}
