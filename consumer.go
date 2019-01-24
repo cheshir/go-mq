@@ -76,13 +76,13 @@ type worker struct {
 	channel         wabbit.Channel
 	deliveries      <-chan wabbit.Delivery
 	errorChannel    chan<- error
-	shutdownChannel chan struct{}
+	shutdownChannel chan chan struct{}
 }
 
 func newWorker(errorChannel chan<- error) *worker {
 	return &worker{
 		errorChannel:    errorChannel,
-		shutdownChannel: make(chan struct{}),
+		shutdownChannel: make(chan chan struct{}),
 	}
 }
 
@@ -104,8 +104,9 @@ func (worker *worker) Run(handler ConsumerHandler) {
 			}
 
 			handler(message)
-		case <-worker.shutdownChannel:
+		case done := <-worker.shutdownChannel:
 			worker.closeChannel()
+			close(done)
 
 			return
 		}
@@ -131,6 +132,8 @@ func (worker *worker) closeChannel() {
 // Force stop.
 func (worker *worker) Stop() {
 	if worker.markAsStoppedIfCan() {
-		worker.shutdownChannel <- struct{}{}
+		done := make(chan struct{})
+		worker.shutdownChannel <- done
+		<-done
 	}
 }

@@ -105,6 +105,18 @@ func TestMq_ProduceConsume(t *testing.T) {
 			}
 			defer mq.Close()
 
+			done := make(chan struct{})
+			go func() {
+				for {
+					select {
+					case err := <-mq.Error():
+						t.Errorf("unexpected error from queue: %v", err)
+					case <-done:
+						return
+					}
+				}
+			}()
+
 			expectedMessage := []byte("test")
 
 			asyncProducer, err := mq.AsyncProducer(defaultAsyncProducerName)
@@ -144,6 +156,7 @@ func TestMq_ProduceConsume(t *testing.T) {
 			}
 
 			assertNoMqError(t, mq)
+			done <- struct{}{}
 		})
 	}
 }

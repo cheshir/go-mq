@@ -24,7 +24,7 @@ type asyncProducer struct {
 	options         wabbit.Option
 	publishChannel  chan []byte
 	routingKey      string
-	shutdownChannel chan struct{}
+	shutdownChannel chan chan struct{}
 }
 
 func newAsyncProducer(channel wabbit.Channel, errorChannel chan<- error, config ProducerConfig) *asyncProducer {
@@ -35,7 +35,7 @@ func newAsyncProducer(channel wabbit.Channel, errorChannel chan<- error, config 
 		options:         wabbit.Option(config.Options),
 		publishChannel:  make(chan []byte, config.BufferSize),
 		routingKey:      config.RoutingKey,
-		shutdownChannel: make(chan struct{}),
+		shutdownChannel: make(chan chan struct{}),
 	}
 }
 
@@ -54,9 +54,10 @@ func (producer *asyncProducer) worker() {
 				producer.errorChannel <- err
 				// TODO Resend message.
 			}
-		case <-producer.shutdownChannel:
+		case done := <-producer.shutdownChannel:
 			// TODO It is necessary to guarantee the message delivery order.
 			producer.closeChannel()
+			close(done)
 
 			return
 		}
@@ -91,9 +92,10 @@ func (producer *asyncProducer) produce(message []byte) error {
 }
 
 // Stops the worker if it is running.
-// TODO Add wait group.
 func (producer *asyncProducer) Stop() {
 	if producer.markAsStoppedIfCan() {
-		producer.shutdownChannel <- struct{}{}
+		done := make(chan struct{})
+		producer.shutdownChannel <- done
+		<-done
 	}
 }
