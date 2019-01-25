@@ -137,6 +137,14 @@ Otherwise mock will be used.
 
 Check [releases page](https://github.com/cheshir/go-mq/releases).
 
+## How to upgrade
+
+### From version 0.x to 1.x
+
+* `GetConsumer()` method was renamed to `Consumer`. This is done to follow go guideline.
+
+* `GetProducer()` method was removed. Use instead `AsyncProducer()` or `SyncProducer` if you want to catch net error by yourself.
+
 ## Epilogue
 
 Feel free to create issues with bug reports or your wishes.
