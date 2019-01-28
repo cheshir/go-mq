@@ -14,12 +14,13 @@ import (
 const (
 	dsnForTests = "amqp://guest:guest@localhost:5672/"
 
-	defaultConsumerName = "default_consumer"
-	defaultExchangeName = "default_exchange"
-	defaultExchangeType = "direct"
-	defaultQueueName    = "default_queue"
-	defaultProducerName = "default_producer"
-	defaultRoutingKey   = "routing_key"
+	defaultConsumerName      = "default_consumer"
+	defaultExchangeName      = "default_exchange"
+	defaultExchangeType      = "direct"
+	defaultQueueName         = "default_queue"
+	defaultAsyncProducerName = "default_async_producer"
+	defaultSyncProducerName  = "default_sync_producer"
+	defaultRoutingKey        = "routing_key"
 )
 
 func init() {
@@ -104,31 +105,58 @@ func TestMq_ProduceConsume(t *testing.T) {
 			}
 			defer mq.Close()
 
+			done := make(chan struct{})
+			go func() {
+				for {
+					select {
+					case err := <-mq.Error():
+						t.Errorf("unexpected error from queue: %v", err)
+					case <-done:
+						return
+					}
+				}
+			}()
+
 			expectedMessage := []byte("test")
 
-			producer, err := mq.GetProducer(defaultProducerName)
+			asyncProducer, err := mq.AsyncProducer(defaultAsyncProducerName)
 			if err != nil {
 				t.Fatal("Failed to get registered producer")
 			}
 
-			producer.Produce(expectedMessage)
+			asyncProducer.Produce(expectedMessage)
+
+			syncProducer, err := mq.SyncProducer(defaultSyncProducerName)
+			if err != nil {
+				t.Fatal("Failed to get registered producer")
+			}
+
+			err = syncProducer.Produce(expectedMessage)
+			if err != nil {
+				t.Fatal("Failed to produce message")
+			}
 
 			var messageWasRead int32
 			mq.SetConsumerHandler(defaultConsumerName, func(message Message) {
-				atomic.StoreInt32(&messageWasRead, 1)
+				atomic.AddInt32(&messageWasRead, 1)
 
 				if !isSliceOfBytesIsEqual(expectedMessage, message.Body()) {
+					message.Reject(false)
 					t.Errorf("Actual message '%s' is not equal to expected '%s'", message.Body(), expectedMessage)
 				}
+
+				message.Ack(false)
 			})
 
 			waitForMessageDelivery()
 
-			if atomic.LoadInt32(&messageWasRead) != 1 {
-				t.Error("Consumer did not read the message")
+			readMessages := atomic.LoadInt32(&messageWasRead)
+			if readMessages != 2 {
+				t.Errorf("Consumer did not read messages. Produced %d, read %d", 2, readMessages)
 			}
 
 			assertNoMqError(t, mq)
+			done <- struct{}{}
 		})
 	}
 }
@@ -163,14 +191,25 @@ func newDefaultConfig() Config {
 				},
 			},
 		}},
-		Producers: Producers{{
-			Name:       defaultProducerName,
-			Exchange:   defaultExchangeName,
-			RoutingKey: defaultRoutingKey,
-			Options: Options{
-				"delivery_mode": 1,
+		Producers: Producers{
+			{
+				Name:       defaultAsyncProducerName,
+				Exchange:   defaultExchangeName,
+				RoutingKey: defaultRoutingKey,
+				Options: Options{
+					"delivery_mode": 1,
+				},
 			},
-		}},
+			{
+				Name:       defaultSyncProducerName,
+				Exchange:   defaultExchangeName,
+				RoutingKey: defaultRoutingKey,
+				Sync:       true,
+				Options: Options{
+					"delivery_mode": 1,
+				},
+			},
+		},
 	}
 }
 
@@ -182,7 +221,7 @@ func TestMq_Reconnect(t *testing.T) {
 	broker := server.NewServer(dsnForTests)
 	broker.Start()
 
-	mq, err := New(Config{
+	messageQueue, err := New(Config{
 		DSN:            dsnForTests,
 		ReconnectDelay: time.Nanosecond,
 		Consumers: Consumers{{
@@ -200,51 +239,71 @@ func TestMq_Reconnect(t *testing.T) {
 			Exchange:   defaultExchangeName,
 			RoutingKey: defaultRoutingKey,
 		}},
-		Producers: Producers{{
-			BufferSize: 1,
-			Name:       defaultProducerName,
-			Exchange:   defaultExchangeName,
-			RoutingKey: defaultRoutingKey,
-		}},
+		Producers: Producers{
+			{
+				BufferSize: 1,
+				Name:       defaultAsyncProducerName,
+				Exchange:   defaultExchangeName,
+				RoutingKey: defaultRoutingKey,
+			},
+			{
+				Name:       defaultSyncProducerName,
+				Exchange:   defaultExchangeName,
+				RoutingKey: defaultRoutingKey,
+				Sync:       true,
+			},
+		},
 	})
 
 	if err != nil {
-		t.Error("Can't create a new instance of mq: ", err)
+		t.Fatal("Can't create a new instance of mq: ", err)
 	}
-
-	defer mq.Close()
 
 	expectedMessage := []byte("test")
 
 	var messageWasRead int32
-	mq.SetConsumerHandler(defaultConsumerName, func(message Message) {
-		atomic.StoreInt32(&messageWasRead, 1)
+	messageQueue.SetConsumerHandler(defaultConsumerName, func(message Message) {
+		atomic.AddInt32(&messageWasRead, 1)
 
 		if !isSliceOfBytesIsEqual(expectedMessage, message.Body()) {
+			message.Reject(false)
 			t.Errorf("Actual message '%s' is not equal to expected '%s'", message.Body(), expectedMessage)
 		}
+
+		message.Ack(false)
 	})
 
 	broker.Stop() // Force reconnect.
 
-	producer, err := mq.GetProducer(defaultProducerName)
+	asyncProducer, err := messageQueue.AsyncProducer(defaultAsyncProducerName)
 	if err != nil {
 		t.Error("Failed to get registered producer")
 	}
 
-	producer.Produce(expectedMessage)
+	asyncProducer.Produce(expectedMessage)
+
+	syncProducer, err := messageQueue.SyncProducer(defaultSyncProducerName)
+	if err != nil {
+		t.Error("Failed to get registered producer")
+	}
+
+	syncProducer.Produce(expectedMessage)
 
 	broker.Start()
 	defer broker.Stop()
 
 	waitForMessageDelivery()
 
-	if atomic.LoadInt32(&messageWasRead) != 1 {
-		t.Error("Consumer did not read the message")
+	readMessages := atomic.LoadInt32(&messageWasRead)
+	if readMessages != 2 {
+		// Probably known problem. Check https://github.com/cheshir/go-mq/issues/25 for details.
+		t.Errorf("Consumer did not read messages. Produced %d, read %d", 2, readMessages)
 	}
+
+	messageQueue.Close()
 }
 
-func TestMq_GetConsumer_Existent(t *testing.T) {
+func TestMq_Consumer_Exists(t *testing.T) {
 	if brokerIsMocked {
 		broker := server.NewServer(dsnForTests)
 		broker.Start()
@@ -278,7 +337,7 @@ func TestMq_GetConsumer_Existent(t *testing.T) {
 
 	defer mq.Close()
 
-	_, err = mq.GetConsumer(defaultConsumerName)
+	_, err = mq.Consumer(defaultConsumerName)
 	if err != nil {
 		t.Error("Failed to get a consumer: ", err)
 	}
@@ -286,7 +345,7 @@ func TestMq_GetConsumer_Existent(t *testing.T) {
 	assertNoMqError(t, mq)
 }
 
-func TestMq_GetConsumer_NonExistent(t *testing.T) {
+func TestMq_Consumer_NotExists(t *testing.T) {
 	if brokerIsMocked {
 		broker := server.NewServer(dsnForTests)
 		broker.Start()
@@ -303,7 +362,7 @@ func TestMq_GetConsumer_NonExistent(t *testing.T) {
 
 	defer mq.Close()
 
-	_, err = mq.GetConsumer("nonexistent_consumer")
+	_, err = mq.Consumer("nonexistent_consumer")
 	if err == nil {
 		t.Error("Did not catch an error during the retrieval of non-existent consumer.")
 	}
@@ -311,7 +370,7 @@ func TestMq_GetConsumer_NonExistent(t *testing.T) {
 	assertNoMqError(t, mq)
 }
 
-func TestMq_GetProducer_Existent(t *testing.T) {
+func TestMq_Producer_Exists(t *testing.T) {
 	if brokerIsMocked {
 		broker := server.NewServer(dsnForTests)
 		broker.Start()
@@ -333,10 +392,17 @@ func TestMq_GetProducer_Existent(t *testing.T) {
 				},
 			},
 		}},
-		Producers: Producers{{
-			Name:     defaultProducerName,
-			Exchange: defaultExchangeName,
-		}},
+		Producers: Producers{
+			{
+				Name:     defaultAsyncProducerName,
+				Exchange: defaultExchangeName,
+			},
+			{
+				Name:     defaultSyncProducerName,
+				Exchange: defaultExchangeName,
+				Sync:     true,
+			},
+		},
 	})
 
 	if err != nil {
@@ -345,15 +411,20 @@ func TestMq_GetProducer_Existent(t *testing.T) {
 
 	defer mq.Close()
 
-	_, err = mq.GetProducer(defaultProducerName)
+	_, err = mq.AsyncProducer(defaultAsyncProducerName)
 	if err != nil {
-		t.Error("Failed to get a producer: ", err)
+		t.Error("Failed to get an async producer: ", err)
+	}
+
+	_, err = mq.SyncProducer(defaultSyncProducerName)
+	if err != nil {
+		t.Error("Failed to get a sync producer: ", err)
 	}
 
 	assertNoMqError(t, mq)
 }
 
-func TestMq_GetProducer_NonExistent(t *testing.T) {
+func TestMq_Producer_NonExistent(t *testing.T) {
 	if brokerIsMocked {
 		broker := server.NewServer(dsnForTests)
 		broker.Start()
@@ -370,9 +441,14 @@ func TestMq_GetProducer_NonExistent(t *testing.T) {
 
 	defer mq.Close()
 
-	_, err = mq.GetProducer("nonexistent_producer")
+	_, err = mq.AsyncProducer("nonexistent_producer")
 	if err == nil {
-		t.Error("No error got during getting non existent producer")
+		t.Error("No error got during getting non existent async producer")
+	}
+
+	_, err = mq.SyncProducer("nonexistent_producer")
+	if err == nil {
+		t.Error("No error got during getting non existent sync producer")
 	}
 
 	assertNoMqError(t, mq)

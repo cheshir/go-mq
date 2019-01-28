@@ -6,12 +6,15 @@ import (
 	"github.com/NeowayLabs/wabbit"
 )
 
-// Producer describes available methods for producer.
-type Producer interface {
+// AsyncProducer describes available methods for producer.
+// This kind of producer is asynchronous.
+// All occurred errors will be accessible with MQ.Error().
+type AsyncProducer interface {
+	// Produce sends message to broker. Returns immediately.
 	Produce(data []byte)
 }
 
-type producer struct {
+type asyncProducer struct {
 	sync.Mutex // Protect channel during posting and reconnect.
 	workerStatus
 
@@ -21,22 +24,26 @@ type producer struct {
 	options         wabbit.Option
 	publishChannel  chan []byte
 	routingKey      string
-	shutdownChannel chan struct{}
+	shutdownChannel chan chan struct{}
 }
 
-func newProducer(channel wabbit.Channel, errorChannel chan<- error, config ProducerConfig) *producer {
-	return &producer{
+func newAsyncProducer(channel wabbit.Channel, errorChannel chan<- error, config ProducerConfig) *asyncProducer {
+	return &asyncProducer{
 		channel:         channel,
 		errorChannel:    errorChannel,
 		exchange:        config.Exchange,
 		options:         wabbit.Option(config.Options),
 		publishChannel:  make(chan []byte, config.BufferSize),
 		routingKey:      config.RoutingKey,
-		shutdownChannel: make(chan struct{}),
+		shutdownChannel: make(chan chan struct{}),
 	}
 }
 
-func (producer *producer) worker() {
+func (producer *asyncProducer) init() {
+	go producer.worker()
+}
+
+func (producer *asyncProducer) worker() {
 	producer.markAsRunning()
 
 	for {
@@ -47,9 +54,10 @@ func (producer *producer) worker() {
 				producer.errorChannel <- err
 				// TODO Resend message.
 			}
-		case <-producer.shutdownChannel:
+		case done := <-producer.shutdownChannel:
 			// TODO It is necessary to guarantee the message delivery order.
 			producer.closeChannel()
+			close(done)
 
 			return
 		}
@@ -57,14 +65,14 @@ func (producer *producer) worker() {
 }
 
 // Method safely sets new RMQ channel.
-func (producer *producer) setChannel(channel wabbit.Channel) {
+func (producer *asyncProducer) setChannel(channel wabbit.Channel) {
 	producer.Lock()
 	producer.channel = channel
 	producer.Unlock()
 }
 
 // Close producer's channel.
-func (producer *producer) closeChannel() {
+func (producer *asyncProducer) closeChannel() {
 	producer.Lock()
 	if err := producer.channel.Close(); err != nil {
 		producer.errorChannel <- err
@@ -72,11 +80,11 @@ func (producer *producer) closeChannel() {
 	producer.Unlock()
 }
 
-func (producer *producer) Produce(message []byte) {
+func (producer *asyncProducer) Produce(message []byte) {
 	producer.publishChannel <- message
 }
 
-func (producer *producer) produce(message []byte) error {
+func (producer *asyncProducer) produce(message []byte) error {
 	producer.Lock()
 	defer producer.Unlock()
 
@@ -84,9 +92,10 @@ func (producer *producer) produce(message []byte) error {
 }
 
 // Stops the worker if it is running.
-// TODO Add wait group.
-func (producer *producer) Stop() {
+func (producer *asyncProducer) Stop() {
 	if producer.markAsStoppedIfCan() {
-		producer.shutdownChannel <- struct{}{}
+		done := make(chan struct{})
+		producer.shutdownChannel <- done
+		<-done
 	}
 }

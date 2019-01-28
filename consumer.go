@@ -8,6 +8,7 @@ import (
 
 // Consumer describes available methods for consumer.
 type Consumer interface {
+	// Consume runs consumer's workers with specified handler.
 	Consume(handler ConsumerHandler)
 }
 
@@ -49,12 +50,16 @@ func newConsumer(config ConsumerConfig) *consumer {
 // Can be called only once.
 func (consumer *consumer) Consume(handler ConsumerHandler) {
 	consumer.once.Do(func() {
-		consumer.handler = handler
-
-		for _, worker := range consumer.workers {
-			go worker.Run(handler)
-		}
+		consumer.consume(handler)
 	})
+}
+
+func (consumer *consumer) consume(handler ConsumerHandler) {
+	consumer.handler = handler
+
+	for _, worker := range consumer.workers {
+		go worker.Run(handler)
+	}
 }
 
 // Stop terminates consumer's workers.
@@ -71,13 +76,13 @@ type worker struct {
 	channel         wabbit.Channel
 	deliveries      <-chan wabbit.Delivery
 	errorChannel    chan<- error
-	shutdownChannel chan struct{}
+	shutdownChannel chan chan struct{}
 }
 
 func newWorker(errorChannel chan<- error) *worker {
 	return &worker{
 		errorChannel:    errorChannel,
-		shutdownChannel: make(chan struct{}),
+		shutdownChannel: make(chan chan struct{}),
 	}
 }
 
@@ -99,8 +104,9 @@ func (worker *worker) Run(handler ConsumerHandler) {
 			}
 
 			handler(message)
-		case <-worker.shutdownChannel:
+		case done := <-worker.shutdownChannel:
 			worker.closeChannel()
+			close(done)
 
 			return
 		}
@@ -124,9 +130,10 @@ func (worker *worker) closeChannel() {
 }
 
 // Force stop.
-// TODO Add wait group.
 func (worker *worker) Stop() {
 	if worker.markAsStoppedIfCan() {
-		worker.shutdownChannel <- struct{}{}
+		done := make(chan struct{})
+		worker.shutdownChannel <- done
+		<-done
 	}
 }

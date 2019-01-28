@@ -23,19 +23,27 @@ const (
 // Used for creating connection to the fake AMQP server for tests.
 var brokerIsMocked bool
 
-// MQ describes methods provided by message broker adapter.
-type MQ interface {
-	GetConsumer(name string) (Consumer, error)
-	SetConsumerHandler(name string, handler ConsumerHandler) error
-	GetProducer(name string) (Producer, error)
-	Error() <-chan error
-	Close()
-}
-
 type conn interface {
 	Channel() (wabbit.Channel, error)
 	Close() error
 	NotifyClose(chan wabbit.Error) chan wabbit.Error
+}
+
+// MQ describes methods provided by message broker adapter.
+type MQ interface {
+	// Consumer returns consumer object by its name.
+	Consumer(name string) (Consumer, error)
+	// SetConsumerHandler allows you to set handler callback without getting consumer.
+	SetConsumerHandler(name string, handler ConsumerHandler) error
+	// AsyncProducer returns async producer. Should be used in most cases.
+	AsyncProducer(name string) (AsyncProducer, error)
+	// SyncProducer returns sync producer.
+	SyncProducer(name string) (SyncProducer, error)
+	// Error returns channel with all occurred errors.
+	// Errors from sync producer won't be accessible.
+	Error() <-chan error
+	// Close stop all consumers and producers and close connection to broker.
+	Close()
 }
 
 type mq struct {
@@ -72,19 +80,10 @@ func New(config Config) (MQ, error) {
 	return mq, mq.initialSetup()
 }
 
-// GetConsumer returns a consumer by its name or error if consumer wasn't found.
-func (mq *mq) GetConsumer(name string) (consumer Consumer, err error) {
-	consumer, ok := mq.consumers.Get(name)
-	if !ok {
-		err = fmt.Errorf("consumer '%s' is not registered. Check your configuration", name)
-	}
-
-	return
-}
-
 // Set handler for consumer by its name. Returns false if consumer wasn't found.
+// Can be called once for each consumer.
 func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
-	consumer, err := mq.GetConsumer(name)
+	consumer, err := mq.Consumer(name)
 	if err != nil {
 		return err
 	}
@@ -94,14 +93,38 @@ func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
 	return nil
 }
 
-// GetProducer returns a producer by its name or false if producer wasn't found.
-func (mq *mq) GetProducer(name string) (producer Producer, err error) {
-	producer, ok := mq.producers.Get(name)
+// Consumer returns a consumer by its name or error if consumer wasn't found.
+func (mq *mq) Consumer(name string) (consumer Consumer, err error) {
+	consumer, ok := mq.consumers.Get(name)
 	if !ok {
-		err = fmt.Errorf("producer '%s' is not registered. Check your configuration", name)
+		err = fmt.Errorf("consumer '%s' is not registered. Check your configuration", name)
 	}
 
 	return
+}
+
+// AsyncProducer returns an async producer by its name or error if producer wasn't found.
+func (mq *mq) AsyncProducer(name string) (AsyncProducer, error) {
+	item, exists := mq.producers.Get(name)
+	producer, asserted := item.(*asyncProducer)
+
+	if !exists || !asserted {
+		return nil, fmt.Errorf("producer '%s' is not registered. Check your configuration", name)
+	}
+
+	return producer, nil
+}
+
+// SyncProducer returns a sync producer by its name or error if producer wasn't found.
+func (mq *mq) SyncProducer(name string) (SyncProducer, error) {
+	item, exists := mq.producers.Get(name)
+	producer, asserted := item.(*syncProducer)
+
+	if !exists || !asserted {
+		return nil, fmt.Errorf("producer '%s' is not registered. Check your configuration", name)
+	}
+
+	return producer, nil
 }
 
 // Error provides an ability to access occurring errors.
@@ -164,14 +187,15 @@ func (mq *mq) errorHandler() {
 	for err := range mq.internalErrorChannel {
 		select {
 		case mq.errorChannel <- err: // Proxies errors to the user.
-		default: // For that clients who don't read errors.
+		default: // For those clients who don't read errors.
 		}
 
 		mq.processError(err)
 	}
 }
 
-func (mq *mq) processError(err interface{}) {
+func (mq *mq) processError(err error) {
+	println("got error: " + err.Error())
 	switch err.(type) {
 	case *net.OpError:
 		go mq.reconnect()
@@ -183,7 +207,11 @@ func (mq *mq) processError(err interface{}) {
 			go mq.reconnect()
 		}
 	default:
-		// There is no special behaviour for other errors.
+		// Wabbit error. Means that server is down.
+		// Used in tests.
+		if err.Error() == "Network unreachable" {
+			go mq.reconnect()
+		}
 	}
 }
 
@@ -213,7 +241,7 @@ func (mq *mq) setupAfterReconnect() error {
 		return err
 	}
 
-	mq.producers.GoEach(func(producer *producer) {
+	mq.producers.GoEach(func(producer internalProducer) {
 		if err := mq.reconnectProducer(producer); err != nil {
 			mq.internalErrorChannel <- err
 		}
@@ -280,22 +308,21 @@ func (mq *mq) registerProducer(config ProducerConfig) error {
 		return err
 	}
 
-	producer := newProducer(channel, mq.internalErrorChannel, config)
-
-	go producer.worker()
+	producer := newInternalProducer(channel, mq.internalErrorChannel, config)
+	producer.init()
 	mq.producers.Set(config.Name, producer)
 
 	return nil
 }
 
-func (mq *mq) reconnectProducer(producer *producer) error {
+func (mq *mq) reconnectProducer(producer internalProducer) error {
 	channel, err := mq.connection.Channel()
 	if err != nil {
 		return err
 	}
 
 	producer.setChannel(channel)
-	go producer.worker()
+	producer.init()
 
 	return nil
 }
@@ -316,7 +343,7 @@ func (mq *mq) registerConsumer(config ConsumerConfig) error {
 	}
 
 	// Consumer must have at least one worker.
-	if config.Workers == 0 {
+	if config.Workers < 1 {
 		config.Workers = 1
 	}
 
@@ -344,9 +371,9 @@ func (mq *mq) reconnectConsumer(consumer *consumer) error {
 		if err := mq.initializeConsumersWorker(consumer, worker); err != nil {
 			return err
 		}
-
-		go worker.Run(consumer.handler)
 	}
+
+	consumer.consume(consumer.handler)
 
 	return nil
 }
@@ -375,11 +402,13 @@ func (mq *mq) initializeConsumersWorker(consumer *consumer, worker *worker) erro
 // Reconnect stops current producers and consumers,
 // recreates connection to the rabbit and than runs producers and consumers.
 func (mq *mq) reconnect() {
-	notBusy := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
-	if !notBusy {
-		// There is no need to start a new reconnect if the previous one is not finished yet.
+	Printer <- "call for reconnect"
+	startedReconnect := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
+	// There is no need to start a new reconnect if the previous one is not finished yet.
+	if !startedReconnect {
 		return
 	}
+	Printer <- "start reconnect"
 
 	defer func() {
 		atomic.StoreInt32(&mq.reconnectStatus, statusReadyForReconnect)
@@ -398,10 +427,11 @@ func (mq *mq) reconnect() {
 	if err := mq.setupAfterReconnect(); err != nil {
 		mq.internalErrorChannel <- err
 	}
+	Printer <- "successfully finish reconnect"
 }
 
 func (mq *mq) stopProducersAndConsumers() {
-	mq.producers.GoEach(func(producer *producer) {
+	mq.producers.GoEach(func(producer internalProducer) {
 		producer.Stop()
 	})
 

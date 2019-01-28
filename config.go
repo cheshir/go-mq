@@ -88,6 +88,7 @@ func (producers Producers) normalize() {
 
 // ProducerConfig describes producer's configuration.
 type ProducerConfig struct {
+	Sync       bool    `mapstructure:"sync" json:"sync" yaml:"sync"`
 	BufferSize int     `mapstructure:"buffer_size" json:"buffer_size" yaml:"buffer_size"`
 	Exchange   string  `mapstructure:"exchange" json:"exchange" yaml:"exchange"`
 	Name       string  `mapstructure:"name" json:"name" yaml:"name"`

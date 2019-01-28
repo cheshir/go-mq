@@ -11,198 +11,32 @@
 This package provides an ability to encapsulate creation and configuration of [AMQP](https://www.amqp.org) entities 
 like queues, exchanges, producers and consumers in a declarative way with a single config.
 
+Exchanges, queues and producers are going to be initialized in the background.
+
+go-mq supports both sync and async producers.
+
+go-mq has auto reconnects on closed connection or network error.
+You can configure delay between each connect try using `reconnect_delay` option.
+
 ## Install
 
-`go get github.com/cheshir/go-mq`
+`go get -u github.com/cheshir/go-mq`
 
-## Example
+## API
 
-### Hello world with default AMQP library
+Visit [godoc](https://godoc.org/github.com/cheshir/go-mq) to get information about library API.
 
-```go
-package main
+For those of us who preferred learn something new on practice there is working examples in `example` directory.
 
-import (
-	"github.com/streadway/amqp"
-)
+## Configuration
 
-func main() {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
-	
-	ch, err := conn.Channel()
-	if err != nil {
-		panic(err)
-	}
-	defer ch.Close()
-	
-	q, err := ch.QueueDeclare(
-		"hello_q", // name
-		true,      // durable
-		false,     // delete when unused
-		false,     // exclusive
-		false,     // no-wait
-		nil,       // arguments
-	)
-	if err != nil {
-		panic(err)
-	}
-	
-	err = ch.ExchangeDeclare(
-	  "demo",   // name
-	  "direct", // type
-	  true,     // durable
-	  false,    // auto-deleted
-	  false,    // internal
-	  false,    // no-wait
-	  nil,      // arguments
-	)
-	
-	err = ch.QueueBind(q.Name, "route", "demo", false, nil)
-	if err != nil {
-		panic(err)
-	}
-	
-	body := "hello world!"
-	err = ch.Publish(
-		"demo",  // exchange
-		"route", // routing key
-		false,   // mandatory
-		false,   // immediate
-		amqp.Publishing {
-		  ContentType: "text/plain",
-		  Body:        []byte(body),
-		},
-	)
-	if err != nil {
-		panic(err)
-	}
-	
-	deliveries, err := ch.Consume(
-		q.Name, // name
-		"",       // consumer tag
-		false,    // auto ack
-		false,    // exclusive
-		false,    // no-local
-		false,    // no-wait,
-		nil,
-	)
-	if err != nil {
-		panic(err)
-	}
-	
-	handleMessages(deliveries)
-}
-
-func handleMessages(deliveries <-chan amqp.Delivery) {
-	for message := range deliveries {
-		// Process message here.
-		message.Ack(false)
-	}
-}
-```
-
-Looks too verbose if you ask me.
-
-### Same hello world with go-mq
-
-Config file:
-
-```yaml
-mq:
-  dsn: "amqp://guest:guest@localhost:5672/"
-  exchanges:
-    - name: "demo"
-      type: "direct"
-      options:
-        durable: true
-  queues:
-    - name: "hello_q"
-      exchange: "demo"      # Link to exchange "demo".
-      routing_key: "route"
-      options:
-        durable: true
-  producers:
-    - name: "hello_p"
-      exchange: "demo"      # Link to exchange "demo".
-      routing_key: "route"
-      options:
-        content_type: "text/plain"
-  consumers:
-    - name: "hello_c"
-      queue: "hello_q"      # Link to queue
-      workers: 1
-```
-
-And then we're going to read config with [Viper](https://github.com/spf13/viper) and produce message to the queue:
-
-```go
-package main
-
-import (
-	"github.com/cheshir/go-mq"
-	"github.com/spf13/viper"
-)
-
-func init() {
-    // Configure viper.
-}
-
-func main() {
-	var config mq.Config
-	if err := viper.Sub("mq").Unmarshal(&config); err != nil {
-		panic(err)
-	}
-
-	queue, err := mq.New(config)
-	if err != nil {
-		panic("Error during initializing RabbitMQ: " + err.Error())
-	}
-	defer queue.Close()
-	
-	// Get producer by its name.
-	producer, err := queue.GetProducer("hello_p")
-	if err != nil {
-		panic(err)
-	}
-	
-	body := "hello world!"
-	producer.Produce([]byte(body))
-	
-	consumer, err := queue.GetConsumer("hello_c")
-	if err != nil {
-		panic("Trying to get unknown consumer")
-	}
-	consumer.Consume(handleMessages)
-	
-	// Or you can use a little bit shorter approach:
-	// if err := queue.SetConsumerHandler("hello_c", handleMessages); err != nil {
-	//	  panic(err)
-	// }
-	
-	select {}
-}
-
-func handleMessages(message mq.Message) {
-	// Process message here.
-	message.Ack(false)
-}
-```
-
-Of course, you can fill `mq.Config` without `Viper`. Supported tags:
+Supported configuration tags:
 
 * json
 * yaml
 * mapstructure
 
-Exchanges, queues and producers are going to be initialized in the background.
-
-You can get concrete producer with `queue.GetProducer()`.
-
-## Config in depth
+Available options:
 
 ```yaml
 dsn: "amqp://login:password@host:port/virtual_host"
@@ -235,6 +69,7 @@ producers:
     buffer_size: 10                      # Declare how many messages we can buffer during fat messages publishing.
     exchange: "exchange_name"
     routing_key: "route"
+    sync: false                          # Specify whether producer will worked in sync or async mode.
     # Available options with default values:
     options:
       content_type:  "application/json"
@@ -264,7 +99,6 @@ import (
 	"log"
 
 	"github.com/cheshir/go-mq"
-	"github.com/spf13/viper"
 )
 
 func main() {
@@ -286,13 +120,9 @@ func handleMQErrors(errors <-chan error) {
 
 If channel is full – new errors will be dropped.
 
-# Reconnect
+Errors from sync producer won't be accessible from error channel because they returned directly.
 
-go-mq will try to reconnect on closed connection or network error. 
-
-You can set delay between each try with `reconnect_delay` option.
-
-# Tests
+## Tests
 
 There are some cases that can only be tested with real broker 
 and some cases that can only be tested with mocked broker.
@@ -302,6 +132,18 @@ If you are able to run tests with a real broker run them with:
 `go test -mock-broker=0`
 
 Otherwise mock will be used.
+
+## Changelog
+
+Check [releases page](https://github.com/cheshir/go-mq/releases).
+
+## How to upgrade
+
+### From version 0.x to 1.x
+
+* `GetConsumer()` method was renamed to `Consumer`. This is done to follow go guideline.
+
+* `GetProducer()` method was removed. Use instead `AsyncProducer()` or `SyncProducer` if you want to catch net error by yourself.
 
 ## Epilogue
 
