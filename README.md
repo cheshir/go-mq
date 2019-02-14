@@ -41,6 +41,7 @@ Available options:
 ```yaml
 dsn: "amqp://login:password@host:port/virtual_host"
 reconnect_delay: 5s                     # Interval between connection tries. Check https://golang.org/pkg/time/#ParseDuration for details.
+test_mode: false                        # Switches library to use mocked broker. Defaults to false.
 exchanges:
   - name: "exchange_name"
     type: "direct"

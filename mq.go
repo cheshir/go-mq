@@ -167,7 +167,7 @@ func (mq *mq) connect() error {
 }
 
 func (mq *mq) createConnection() (conn conn, err error) {
-	if brokerIsMocked {
+	if brokerIsMocked || mq.config.TestMode {
 		return amqptest.Dial(mq.config.DSN)
 	}
 
