@@ -167,7 +167,7 @@ func (mq *mq) connect() error {
 }
 
 func (mq *mq) createConnection() (conn conn, err error) {
-	if brokerIsMocked {
+	if brokerIsMocked || mq.config.TestMode {
 		return amqptest.Dial(mq.config.DSN)
 	}
 
@@ -402,13 +402,11 @@ func (mq *mq) initializeConsumersWorker(consumer *consumer, worker *worker) erro
 // Reconnect stops current producers and consumers,
 // recreates connection to the rabbit and than runs producers and consumers.
 func (mq *mq) reconnect() {
-	Printer <- "call for reconnect"
 	startedReconnect := atomic.CompareAndSwapInt32(&mq.reconnectStatus, statusReadyForReconnect, statusReconnecting)
 	// There is no need to start a new reconnect if the previous one is not finished yet.
 	if !startedReconnect {
 		return
 	}
-	Printer <- "start reconnect"
 
 	defer func() {
 		atomic.StoreInt32(&mq.reconnectStatus, statusReadyForReconnect)
@@ -427,7 +425,6 @@ func (mq *mq) reconnect() {
 	if err := mq.setupAfterReconnect(); err != nil {
 		mq.internalErrorChannel <- err
 	}
-	Printer <- "successfully finish reconnect"
 }
 
 func (mq *mq) stopProducersAndConsumers() {

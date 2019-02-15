@@ -19,6 +19,7 @@ const (
 type Config struct {
 	DSN            string        `mapstructure:"dsn" json:"dsn" yaml:"dsn"`
 	ReconnectDelay time.Duration `mapstructure:"reconnect_delay" json:"reconnect_delay" yaml:"reconnect_delay"`
+	TestMode       bool          `mapstructure:"test_mode" json:"test_mode" yaml:"test_mode"`
 	Exchanges      Exchanges     `mapstructure:"exchanges" json:"exchanges" yaml:"exchanges"`
 	Queues         Queues        `mapstructure:"queues" json:"queues" yaml:"queues"`
 	Producers      Producers     `mapstructure:"producers" json:"producers" yaml:"producers"`
