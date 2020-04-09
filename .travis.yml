@@ -1,3 +1,5 @@
+os: linux
+dist: trusty
 language: go
 
 services:
