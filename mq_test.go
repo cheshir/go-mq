@@ -214,8 +214,6 @@ func newDefaultConfig() Config {
 }
 
 func TestMq_Reconnect(t *testing.T) {
-	t.Skip("Test skipped due to phantom bug described in https://github.com/cheshir/go-mq/issues/25")
-
 	if !brokerIsMocked {
 		t.Skip("We can't stop real broker from test.")
 	}
