@@ -195,7 +195,6 @@ func (mq *mq) errorHandler() {
 }
 
 func (mq *mq) processError(err error) {
-	println("got error: " + err.Error())
 	switch err.(type) {
 	case *net.OpError:
 		go mq.reconnect()
