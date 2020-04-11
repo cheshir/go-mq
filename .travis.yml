@@ -16,7 +16,6 @@ go:
 
 script:
   - go get ./...
-  - go mod graph
   - gofmt -d -s .
   - go vet *.go
   - go test -v -race -mock-broker=1 # Run tests with real broker.
