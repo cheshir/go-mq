@@ -9,7 +9,7 @@
 
 # About
 
-This package provides an ability to encapsulate creation and configuration of [AMQP](https://www.amqp.org) entities 
+This package provides an ability to encapsulate creation and configuration of RabbitMQ([AMQP])(https://www.amqp.org) entities 
 like queues, exchanges, producers and consumers in a declarative way with a single config.
 
 Exchanges, queues and producers are going to be initialized in the background.
@@ -31,10 +31,12 @@ For those of us who preferred learn something new on practice there is working e
 
 ## Configuration
 
+You can configure mq using mq.Config struct directly or by filling it from config file.
+
 Supported configuration tags:
 
-* json
 * yaml
+* json
 * mapstructure
 
 Available options:
@@ -143,9 +145,9 @@ Check [releases page](https://github.com/cheshir/go-mq/releases).
 
 ### From version 0.x to 1.x
 
-* `GetConsumer()` method was renamed to `Consumer`. This is done to follow go guideline.
+* `GetConsumer()` method was renamed to `Consumer()`. This is done to follow go guideline.
 
-* `GetProducer()` method was removed. Use instead `AsyncProducer()` or `SyncProducer` if you want to catch net error by yourself.
+* `GetProducer()` method was removed. Use instead `AsyncProducer()` or `SyncProducer()` if you want to catch net error by yourself.
 
 ## Epilogue
 
