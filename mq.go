@@ -17,7 +17,7 @@ import (
 const (
 	// Describes states during reconnect.
 	statusReadyForReconnect int32 = 0
-	statusReconnecting            = 1
+	statusReconnecting      int32 = 1
 )
 
 // Used for creating connection to the fake AMQP server for tests.
@@ -94,13 +94,15 @@ func (mq *mq) SetConsumerHandler(name string, handler ConsumerHandler) error {
 }
 
 // Consumer returns a consumer by its name or error if consumer wasn't found.
-func (mq *mq) Consumer(name string) (consumer Consumer, err error) {
+func (mq *mq) Consumer(name string) (Consumer, error) {
 	consumer, ok := mq.consumers.Get(name)
 	if !ok {
-		err = fmt.Errorf("consumer '%s' is not registered. Check your configuration", name)
+		err := fmt.Errorf("consumer '%s' is not registered. Check your configuration", name)
+
+		return nil, err
 	}
 
-	return
+	return consumer, nil
 }
 
 // AsyncProducer returns an async producer by its name or error if producer wasn't found.
@@ -137,11 +139,11 @@ func (mq *mq) Close() {
 	mq.stopProducersAndConsumers()
 
 	if mq.channel != nil {
-		mq.channel.Close()
+		_ = mq.channel.Close()
 	}
 
 	if mq.connection != nil {
-		mq.connection.Close()
+		_ = mq.connection.Close()
 	}
 }
 
@@ -153,7 +155,7 @@ func (mq *mq) connect() error {
 
 	channel, err := connection.Channel()
 	if err != nil {
-		connection.Close()
+		_ = connection.Close()
 
 		return err
 	}
@@ -166,7 +168,7 @@ func (mq *mq) connect() error {
 	return nil
 }
 
-func (mq *mq) createConnection() (conn conn, err error) {
+func (mq *mq) createConnection() (conn, error) {
 	if brokerIsMocked || mq.config.TestMode {
 		return amqptest.Dial(mq.config.DSN)
 	}
