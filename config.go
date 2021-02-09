@@ -1,6 +1,7 @@
 package mq
 
 import (
+	"strings"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -24,14 +25,21 @@ type Config struct {
 	Queues         Queues        `mapstructure:"queues" json:"queues" yaml:"queues"`
 	Producers      Producers     `mapstructure:"producers" json:"producers" yaml:"producers"`
 	Consumers      Consumers     `mapstructure:"consumers" json:"consumers" yaml:"consumers"`
+	dsnList        []string
 }
 
 // Traverses the config tree and fixes option keys name.
-func (config Config) normalize() {
+func (config *Config) normalize() {
 	config.Exchanges.normalize()
 	config.Queues.normalize()
 	config.Producers.normalize()
 	config.Consumers.normalize()
+	config.dsnClusterParse()
+}
+
+// Parse DSN to cluster list
+func (config *Config) dsnClusterParse() {
+	config.dsnList = strings.Split(config.DSN, ",")
 }
 
 // Exchanges describes configuration list for exchanges.

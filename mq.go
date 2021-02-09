@@ -4,6 +4,7 @@ package mq
 import (
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,6 +56,10 @@ type mq struct {
 	consumers            *consumersRegistry
 	producers            *producersRegistry
 	reconnectStatus      int32 // Defines whether client is trying to reconnect or not.
+	cluster              struct {
+		sync.Once
+		currentNode int32
+	}
 }
 
 // New initializes AMQP connection to the message broker
@@ -169,11 +174,18 @@ func (mq *mq) connect() error {
 }
 
 func (mq *mq) createConnection() (conn, error) {
+	mq.cluster.Do(func() { atomic.StoreInt32(&mq.cluster.currentNode, -1) })
+	atomic.AddInt32(&mq.cluster.currentNode, 1)
+	if int(mq.cluster.currentNode) >= len(mq.config.dsnList) {
+		atomic.StoreInt32(&mq.cluster.currentNode, 0)
+	}
+	dsn := mq.config.dsnList[mq.cluster.currentNode]
+
 	if brokerIsMocked || mq.config.TestMode {
-		return amqptest.Dial(mq.config.DSN)
+		return amqptest.Dial(dsn)
 	}
 
-	return amqp.Dial(mq.config.DSN)
+	return amqp.Dial(dsn)
 }
 
 // Register close handler.

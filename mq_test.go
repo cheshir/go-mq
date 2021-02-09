@@ -493,6 +493,43 @@ func TestMq_New_InvalidConsumerConfiguration(t *testing.T) {
 	}
 }
 
+func Test_mq_createConnection(t *testing.T) {
+	cases := []struct {
+		name      string
+		dsn       string
+		checkList []string
+	}{
+		{name: "single dsn", dsn: dsnForTests, checkList: []string{dsnForTests}},
+		{name: "cluster dsn", dsn: "amqp://guest:guest@localhost:5672/1,amqp://guest:guest@localhost:5672/2,amqp://guest:guest@localhost:5672/3",
+			checkList: []string{"amqp://guest:guest@localhost:5672/1", "amqp://guest:guest@localhost:5672/2", "amqp://guest:guest@localhost:5672/3", "amqp://guest:guest@localhost:5672/1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newDefaultConfig()
+			cfg.DSN = tc.dsn
+			cfg.TestMode = true
+			cfg.normalize()
+
+			mq := &mq{
+				config:               cfg,
+				errorChannel:         make(chan error),
+				internalErrorChannel: make(chan error),
+				consumers:            newConsumersRegistry(len(cfg.Consumers)),
+				producers:            newProducersRegistry(len(cfg.Producers)),
+			}
+			defer mq.Close()
+			for _, dsn := range tc.checkList {
+				_, _ = mq.createConnection()
+				curBroker := mq.config.dsnList[mq.cluster.currentNode]
+				if curBroker != dsn {
+					t.Errorf("createConnection() current broker %v, expected broker %v", curBroker, dsn)
+					return
+				}
+			}
+		})
+	}
+}
+
 func assertNoMqError(t *testing.T, mq MQ) {
 	select {
 	case err := <-mq.Error():
