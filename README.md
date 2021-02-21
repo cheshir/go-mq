@@ -42,7 +42,7 @@ Supported configuration tags:
 Available options:
 
 ```yaml
-dsn: "amqp://login:password@host:port/virtual_host"
+dsn: "amqp://login:password@host:port/virtual_host" # Use comma separated list for cluster connection
 reconnect_delay: 5s                     # Interval between connection tries. Check https://golang.org/pkg/time/#ParseDuration for details.
 test_mode: false                        # Switches library to use mocked broker. Defaults to false.
 exchanges:
