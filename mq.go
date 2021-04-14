@@ -20,7 +20,6 @@ const (
 	statusReadyForReconnect int32 = 0
 	statusReconnecting      int32 = 1
 
-	ConnectionStateUndefined    ConnectionState = 0
 	ConnectionStateDisconnected ConnectionState = 1
 	ConnectionStateConnected    ConnectionState = 2
 	ConnectionStateConnecting   ConnectionState = 3
@@ -86,7 +85,7 @@ func New(config Config) (MQ, error) {
 		producers:            newProducersRegistry(len(config.Producers)),
 		state:                new(int32),
 	}
-	atomic.StoreInt32(mq.state, int32(ConnectionStateUndefined))
+	atomic.StoreInt32(mq.state, int32(ConnectionStateDisconnected))
 
 	if err := mq.connect(); err != nil {
 		return nil, err

@@ -535,7 +535,7 @@ func TestMq_ConnectionState(t *testing.T) {
 		name     string
 		expected ConnectionState
 	}{
-		{name: "status undefined", expected: ConnectionStateUndefined},
+		{name: "status disconnected", expected: ConnectionStateDisconnected},
 		{name: "status changed", expected: ConnectionStateConnecting},
 	}
 	for _, tc := range cases {
