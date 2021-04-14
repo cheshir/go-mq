@@ -530,6 +530,39 @@ func Test_mq_createConnection(t *testing.T) {
 	}
 }
 
+func TestMq_ConnectionState(t *testing.T) {
+	cases := []struct {
+		name     string
+		expected ConnectionState
+	}{
+		{name: "status undefined", expected: ConnectionStateUndefined},
+		{name: "status changed", expected: ConnectionStateConnecting},
+	}
+	for _, tc := range cases {
+		cfg := newDefaultConfig()
+		cfg.TestMode = true
+		cfg.normalize()
+
+		mq := &mq{
+			config:               cfg,
+			errorChannel:         make(chan error),
+			internalErrorChannel: make(chan error),
+			consumers:            newConsumersRegistry(len(cfg.Consumers)),
+			producers:            newProducersRegistry(len(cfg.Producers)),
+			state:                new(int32),
+		}
+		atomic.StoreInt32(mq.state, int32(tc.expected))
+
+		t.Run(tc.name, func(t *testing.T) {
+			defer mq.Close()
+			if mq.ConnectionState() != tc.expected {
+				t.Errorf("ConnectionState() current value %v, expected broker %v", mq.ConnectionState(), tc.expected)
+			}
+		})
+	}
+
+}
+
 func assertNoMqError(t *testing.T, mq MQ) {
 	select {
 	case err := <-mq.Error():

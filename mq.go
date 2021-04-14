@@ -20,10 +20,10 @@ const (
 	statusReadyForReconnect int32 = 0
 	statusReconnecting      int32 = 1
 
-	ConnectionStateDisconnected int32 = 1
-	ConnectionStateConnected    int32 = 2
-	ConnectionStateConnecting   int32 = 3
-	ConnectionStateReconnecting int32 = 4
+	ConnectionStateUndefined    ConnectionState = 0
+	ConnectionStateDisconnected ConnectionState = 1
+	ConnectionStateConnected    ConnectionState = 2
+	ConnectionStateConnecting   ConnectionState = 3
 )
 
 // Used for creating connection to the fake AMQP server for tests.
@@ -51,8 +51,10 @@ type MQ interface {
 	// Close stop all consumers and producers and close connection to broker.
 	Close()
 	// Shows connection state
-	ConnectionState() int32
+	ConnectionState() ConnectionState
 }
+
+type ConnectionState uint8
 
 type mq struct {
 	channel              wabbit.Channel
@@ -84,8 +86,8 @@ func New(config Config) (MQ, error) {
 		producers:            newProducersRegistry(len(config.Producers)),
 		state:                new(int32),
 	}
+	atomic.StoreInt32(mq.state, int32(ConnectionStateUndefined))
 
-	atomic.StoreInt32(mq.state, ConnectionStateConnecting)
 	if err := mq.connect(); err != nil {
 		return nil, err
 	}
@@ -162,14 +164,15 @@ func (mq *mq) Close() {
 	}
 }
 
-func (mq *mq) ConnectionState() int32 {
-	return atomic.LoadInt32(mq.state)
+func (mq *mq) ConnectionState() ConnectionState {
+	return ConnectionState(atomic.LoadInt32(mq.state))
 }
 
 func (mq *mq) connect() error {
+	atomic.StoreInt32(mq.state, int32(ConnectionStateConnecting))
 	connection, err := mq.createConnection()
 	if err != nil {
-		atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
+		atomic.StoreInt32(mq.state, int32(ConnectionStateDisconnected))
 		return err
 	}
 
@@ -177,7 +180,7 @@ func (mq *mq) connect() error {
 	if err != nil {
 		_ = connection.Close()
 
-		atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
+		atomic.StoreInt32(mq.state, int32(ConnectionStateDisconnected))
 		return err
 	}
 
@@ -186,7 +189,7 @@ func (mq *mq) connect() error {
 
 	go mq.handleCloseEvent()
 
-	atomic.StoreInt32(mq.state, ConnectionStateConnected)
+	atomic.StoreInt32(mq.state, int32(ConnectionStateConnected))
 	return nil
 }
 
@@ -212,7 +215,7 @@ func (mq *mq) handleCloseEvent() {
 	if err != nil {
 		mq.internalErrorChannel <- err
 	}
-	atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
+	atomic.StoreInt32(mq.state, int32(ConnectionStateDisconnected))
 }
 
 func (mq *mq) errorHandler() {
@@ -447,7 +450,6 @@ func (mq *mq) reconnect() {
 
 	mq.stopProducersAndConsumers()
 
-	atomic.StoreInt32(mq.state, ConnectionStateReconnecting)
 	if err := mq.connect(); err != nil {
 		mq.internalErrorChannel <- err
 
