@@ -19,6 +19,11 @@ const (
 	// Describes states during reconnect.
 	statusReadyForReconnect int32 = 0
 	statusReconnecting      int32 = 1
+
+	ConnectionStateDisconnected int32 = 1
+	ConnectionStateConnected    int32 = 2
+	ConnectionStateConnecting   int32 = 3
+	ConnectionStateReconnecting int32 = 4
 )
 
 // Used for creating connection to the fake AMQP server for tests.
@@ -45,6 +50,8 @@ type MQ interface {
 	Error() <-chan error
 	// Close stop all consumers and producers and close connection to broker.
 	Close()
+	// Shows connection state
+	ConnectionState() int32
 }
 
 type mq struct {
@@ -60,6 +67,7 @@ type mq struct {
 		sync.Once
 		currentNode int32
 	}
+	state *int32
 }
 
 // New initializes AMQP connection to the message broker
@@ -74,8 +82,10 @@ func New(config Config) (MQ, error) {
 		internalErrorChannel: make(chan error),
 		consumers:            newConsumersRegistry(len(config.Consumers)),
 		producers:            newProducersRegistry(len(config.Producers)),
+		state:                new(int32),
 	}
 
+	atomic.StoreInt32(mq.state, ConnectionStateConnecting)
 	if err := mq.connect(); err != nil {
 		return nil, err
 	}
@@ -152,9 +162,14 @@ func (mq *mq) Close() {
 	}
 }
 
+func (mq *mq) ConnectionState() int32 {
+	return atomic.LoadInt32(mq.state)
+}
+
 func (mq *mq) connect() error {
 	connection, err := mq.createConnection()
 	if err != nil {
+		atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
 		return err
 	}
 
@@ -162,6 +177,7 @@ func (mq *mq) connect() error {
 	if err != nil {
 		_ = connection.Close()
 
+		atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
 		return err
 	}
 
@@ -170,6 +186,7 @@ func (mq *mq) connect() error {
 
 	go mq.handleCloseEvent()
 
+	atomic.StoreInt32(mq.state, ConnectionStateConnected)
 	return nil
 }
 
@@ -195,6 +212,7 @@ func (mq *mq) handleCloseEvent() {
 	if err != nil {
 		mq.internalErrorChannel <- err
 	}
+	atomic.StoreInt32(mq.state, ConnectionStateDisconnected)
 }
 
 func (mq *mq) errorHandler() {
@@ -429,6 +447,7 @@ func (mq *mq) reconnect() {
 
 	mq.stopProducersAndConsumers()
 
+	atomic.StoreInt32(mq.state, ConnectionStateReconnecting)
 	if err := mq.connect(); err != nil {
 		mq.internalErrorChannel <- err
 
