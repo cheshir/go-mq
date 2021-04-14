@@ -563,6 +563,48 @@ func TestMq_ConnectionState(t *testing.T) {
 
 }
 
+func TestMq_connect(t *testing.T) {
+	s := server.NewServer(dsnForTests)
+	_ = s.Start()
+	defer func() { _ = s.Stop() }()
+	cases := []struct {
+		name           string
+		expected       ConnectionState
+		isConnectError bool
+		isChannelError bool
+	}{
+		{name: "success connect", expected: ConnectionStateConnected},
+		{name: "failed to connect", expected: ConnectionStateDisconnected, isConnectError: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newDefaultConfig()
+			cfg.TestMode = true
+			cfg.normalize()
+
+			mq := &mq{
+				config:               cfg,
+				errorChannel:         make(chan error),
+				internalErrorChannel: make(chan error),
+				consumers:            newConsumersRegistry(len(cfg.Consumers)),
+				producers:            newProducersRegistry(len(cfg.Producers)),
+				state:                new(int32),
+			}
+			defer mq.Close()
+			if tc.isConnectError {
+				_ = s.Stop()
+			}
+			err := mq.connect()
+			if err != nil && !tc.isConnectError {
+				t.Errorf("connect() no error expected, but got: %v", err)
+			}
+			if mq.ConnectionState() != tc.expected {
+				t.Errorf("connect() expected state %v, got: %v", tc.expected, mq.ConnectionState())
+			}
+		})
+	}
+}
+
 func assertNoMqError(t *testing.T, mq MQ) {
 	select {
 	case err := <-mq.Error():
