@@ -19,7 +19,7 @@ type ConsumerHandler func(message Message)
 // Message describes available methods of the message obtained from queue.
 type Message interface {
 	Ack(multiple bool) error
-	Nack(multiple, request bool) error
+	Nack(multiple, requeue bool) error
 	Reject(requeue bool) error
 	Body() []byte
 }
