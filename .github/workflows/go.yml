@@ -1,0 +1,36 @@
+name: Go
+
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.12.x, 1.13.x, 1.14.x, 1.15.x, 1.16.x]
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:latest
+        ports:
+          - 5672:5672
+        # needed because the rabbitmq container does not provide a healthcheck
+        options: --health-cmd "rabbitmqctl node_health_check" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Get deps
+      run: go get ./...
+    - name: Linter
+      run: |
+        gofmt -d -s .
+        go vet *.go
+    - name: Tests with real broker
+      run: |
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic -mock-broker=0
+        bash <(curl -s https://codecov.io/bash) || true
+    - name: Tests with mocked broker
+      run: go test -v -race -mock-broker=1
+      
