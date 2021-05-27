@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/cheshir/go-mq.svg?branch=master)](https://travis-ci.com/cheshir/go-mq)
+[![Build Status](https://github.com/cheshir/go-mq/actions/workflows/go.yml/badge.svg)](https://github.com/cheshir/go-mq/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/cheshir/go-mq/branch/master/graph/badge.svg)](https://codecov.io/gh/cheshir/go-mq)
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
 [![Sourcegraph](https://sourcegraph.com/github.com/cheshir/go-mq/-/badge.svg)](https://sourcegraph.com/github.com/houseofcat/turbocookedrabbit?badge) 
