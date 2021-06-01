@@ -107,6 +107,7 @@ type ProducerConfig struct {
 
 func (config ProducerConfig) normalize() {
 	config.Options.normalizeKeys()
+	config.Options.fixOptionsValuesTypes()
 }
 
 // Consumers describes configuration list for consumers.
@@ -214,4 +215,19 @@ func (options Options) fixArgsValuesTypes(args amqp.Table) amqp.Table {
 	}
 
 	return args
+}
+
+// The underlying amqp library doesn't support `int` types in Options,
+// so we need convert all `int` types to supported type.
+func (options Options) fixOptionsValuesTypes()  {
+	for k, v := range options {
+		switch v2 := v.(type) {
+		case int:
+			if k == "deliveryMode" {
+				options[k] = uint8(v2)
+			}
+		default:
+			options[k] = v
+		}
+	}
 }
