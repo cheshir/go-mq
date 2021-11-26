@@ -19,8 +19,11 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go-version }}
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v2
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
     - name: Get deps
       run: go get ./...
     - name: Linter
@@ -33,4 +36,8 @@ jobs:
         bash <(curl -s https://codecov.io/bash) || true
     - name: Tests with mocked broker
       run: go test -v -race -mock-broker=1
-      
+    - name: SonarCloud Scan
+      uses: sonarsource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
