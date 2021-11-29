@@ -38,6 +38,15 @@ jobs:
       run: go test -v -race -mock-broker=1
     - name: SonarCloud Scan
       uses: sonarsource/sonarcloud-github-action@master
+      with:
+        args: >
+          -Dsonar.organization=cheshir
+          -Dsonar.projectKey=cheshir_go-mq
+          -Dsonar.sources=.
+          -Dsonar.exclusions=**/*_test.go
+          -Dsonar.tests=.
+          -Dsonar.test.inclusions=**/*_test.go
+          -Dsonar.go.coverage.reportPaths=coverage.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
