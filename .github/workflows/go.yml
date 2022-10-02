@@ -35,7 +35,9 @@ jobs:
         go test -v -race -coverprofile=coverage.txt -covermode=atomic -mock-broker=0
         bash <(curl -s https://codecov.io/bash) || true
     - name: Tests with mocked broker
-      run: go test -v -race -mock-broker=1
+      run:  |
+        go test -v -race -mock-broker=1
+        bash <(curl -s https://codecov.io/bash) || true
     - name: SonarCloud Scan
       uses: sonarsource/sonarcloud-github-action@master
       with:
