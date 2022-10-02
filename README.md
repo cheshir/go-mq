@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cheshir_go-mq&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cheshir_go-mq) 
 [![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
 
 
