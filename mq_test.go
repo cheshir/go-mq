@@ -94,7 +94,7 @@ func TestMq_ProduceConsume(t *testing.T) {
 			requireNoError(t, err, "Failed to get config for test")
 
 			mq, err := New(config)
-			requireNoError(t, err, "Failed to create a new instance of mq")
+			requireNoError(t, err, "Failed to create a new instance of MessageQueue")
 			defer mq.Close()
 
 			done := make(chan struct{})
@@ -242,7 +242,7 @@ func TestMq_Reconnect(t *testing.T) {
 		},
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 	expectedMessage := []byte("test")
 
 	var messageWasRead int32
@@ -313,7 +313,7 @@ func TestMq_Consumer_Exists(t *testing.T) {
 		}},
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 	defer mq.Close()
 
 	_, err = mq.Consumer(defaultConsumerName)
@@ -332,7 +332,7 @@ func TestMq_Consumer_NotExists(t *testing.T) {
 		DSN: dsnForTests,
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 
 	defer mq.Close()
 
@@ -379,7 +379,7 @@ func TestMq_Producer_Exists(t *testing.T) {
 		},
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 	defer mq.Close()
 
 	_, err = mq.AsyncProducer(defaultAsyncProducerName)
@@ -402,7 +402,7 @@ func TestMq_Producer_NonExistent(t *testing.T) {
 		DSN: dsnForTests,
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 
 	defer mq.Close()
 
@@ -430,7 +430,7 @@ func TestMq_SetConsumerHandler_NonExistentConsumer(t *testing.T) {
 		DSN: dsnForTests,
 	})
 
-	requireNoError(t, err, "Can't create a new instance of mq")
+	requireNoError(t, err, "Can't create a new instance of MessageQueue")
 
 	defer mq.Close()
 
@@ -510,7 +510,7 @@ func Test_mq_createConnection(t *testing.T) {
 			cfg.TestMode = true
 			cfg.normalize()
 
-			mq := &mq{
+			mq := &MessageQueue{
 				config:               cfg,
 				errorChannel:         make(chan error),
 				internalErrorChannel: make(chan error),
@@ -543,7 +543,7 @@ func TestMq_ConnectionState(t *testing.T) {
 		cfg.TestMode = true
 		cfg.normalize()
 
-		mq := &mq{
+		mq := &MessageQueue{
 			config:               cfg,
 			errorChannel:         make(chan error),
 			internalErrorChannel: make(chan error),
@@ -582,7 +582,7 @@ func TestMq_connect(t *testing.T) {
 			cfg.TestMode = true
 			cfg.normalize()
 
-			mq := &mq{
+			mq := &MessageQueue{
 				config:               cfg,
 				errorChannel:         make(chan error),
 				internalErrorChannel: make(chan error),
@@ -605,10 +605,10 @@ func TestMq_connect(t *testing.T) {
 	}
 }
 
-func assertNoMqError(t *testing.T, mq MQ) {
+func assertNoMqError(t *testing.T, mq *MessageQueue) {
 	select {
 	case err := <-mq.Error():
-		t.Error("Caught an unexpected error from mq: ", err)
+		t.Error("Caught an unexpected error from MessageQueue: ", err)
 	default:
 	}
 }
