@@ -12,7 +12,7 @@ import (
 	"github.com/NeowayLabs/wabbit/amqp"
 	"github.com/NeowayLabs/wabbit/amqptest"
 	"github.com/NeowayLabs/wabbit/utils"
-	amqpDriver "github.com/streadway/amqp"
+	amqpDriver "github.com/rabbitmq/amqp091-go"
 )
 
 const (

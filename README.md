@@ -19,6 +19,10 @@ go-mq supports both sync and async producers.
 go-mq has auto reconnects on closed connection or network error.
 You can configure delay between each connect try using `reconnect_delay` option.
 
+### Minimal go version
+
+1.16
+
 ## Install
 
 `go get -u github.com/cheshir/go-mq`
