@@ -147,6 +147,12 @@ Check [releases page](https://github.com/cheshir/go-mq/releases).
 
 ## How to upgrade
 
+### From v1 to v2
+
+* `New()` returns `*MessageQueue` not the interface.
+
+* Minimal go version updated to the 1.16.
+
 ### From version 0.x to 1.x
 
 * `GetConsumer()` method was renamed to `Consumer()`. This is done to follow go guideline.
