@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // DeliveryMode describes an AMQP message delivery mode.
@@ -82,6 +82,7 @@ type QueueConfig struct {
 
 func (config QueueConfig) normalize() {
 	config.BindingOptions.normalizeKeys()
+	//config.BindingOptions.buildArgs()
 	config.Options.normalizeKeys()
 	config.Options.buildArgs()
 }
@@ -183,7 +184,7 @@ func (options Options) convertArgsToAMQPTable(args interface{}) amqp.Table {
 
 	switch arguments := args.(type) {
 	case map[string]interface{}:
-		table = amqp.Table(arguments)
+		table = arguments
 	case map[interface{}]interface{}:
 		table = make(amqp.Table, len(arguments))
 
