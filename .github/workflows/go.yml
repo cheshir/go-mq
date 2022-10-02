@@ -38,6 +38,10 @@ jobs:
       run:  |
         go test -v -race -mock-broker=1
         bash <(curl -s https://codecov.io/bash) || true
+
+  sonar:
+    runs-on: ubuntu-latest
+    steps:
     - name: SonarCloud Scan
       uses: sonarsource/sonarcloud-github-action@master
       with:
