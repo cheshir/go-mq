@@ -2,7 +2,7 @@
 [![codecov](https://codecov.io/gh/cheshir/go-mq/branch/master/graph/badge.svg)](https://codecov.io/gh/cheshir/go-mq)
 [![Go Report Card](https://goreportcard.com/badge/cheshir/go-mq)](https://goreportcard.com/report/github.com/cheshir/go-mq)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cheshir_go-mq&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cheshir_go-mq)
-[![Sourcegraph](https://sourcegraph.com/github.com/cheshir/go-mq/-/badge.svg)](https://sourcegraph.com/github.com/houseofcat/turbocookedrabbit?badge) 
+[![Sourcegraph](https://sourcegraph.com/github.com/cheshir/go-mq/-/badge.svg)](https://sourcegraph.com/github.com/cheshir/go-mq?badge) 
 [![GoDoc](https://godoc.org/github.com/cheshir/go-mq?status.svg)](https://godoc.org/github.com/cheshir/go-mq)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/cheshir/go-mq/blob/master/LICENSE)
 
