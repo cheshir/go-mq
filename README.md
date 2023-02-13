@@ -25,7 +25,7 @@ You can configure delay between each connect try using `reconnect_delay` option.
 
 ## Install
 
-`go get -u github.com/cheshir/go-mq`
+`go get -u github.com/cheshir/go-mq/v2`
 
 ## API
 
