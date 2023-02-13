@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/cheshir/go-mq"
+	"github.com/cheshir/go-mq/v2"
 	"gopkg.in/yaml.v1"
 )
 
